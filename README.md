@@ -1,0 +1,2 @@
+# SCR7-ESP32-Joint-Controller
+SCR7 Robot ESP32 bases Joint Controller. Implements joint-level motion control with Field Oriented Control Scheme (FOC) for hybrid stepper motors with AS5048A magnetic encoders and TMC2160 Stepper Driver. Part of the Low Cost Collaborative Robot 7 Project, that aims at realizing a mostly 3D printed collaborative robot arm with seven degrees of freedom, based on hybrid stepper motors and electronics that are mostly available in the Arduino DIY-Community. More Information will follow soon. Work in Progress.
