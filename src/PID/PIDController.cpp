@@ -33,10 +33,12 @@ void PIDController::compute()
 
 
     // Clamp iTerm against windup
-    if (iTerm > outMax)
+    if (iTerm > outMax) {
         iTerm = outMax;
-    else if (iTerm < outMin)
+    }
+    else if (iTerm < outMin) {
         iTerm = outMin;
+    }
 
     static float prev_dInput = 0;
 
@@ -160,8 +162,8 @@ void PIDController::setSampleTime(int newSampleTime)
 
         float ratio = (float)newSampleTime / (float)sampleTime;
 
-        ki = (int32_t)((float)ki * ratio);
-        kd = (int32_t)((float)kd / ratio);
+        ki = ((float)ki * ratio);
+        kd = ((float)kd / ratio);
 
         sampleTime = newSampleTime;
     }

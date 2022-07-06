@@ -35,8 +35,8 @@
 #define DRVSYS_CONTROL_TORQUE_FREQU 3000 // Hz
 #define DRVSYS_CONTROL_VEL_PERIOD_US 333 //us //600Hz
 #define DRVSYS_CONTROL_VEL_FREQ 3000    //Hz
-#define DRVSYS_CONTROL_POS_PERIOD_US 1000 //ms //1000Hz
-#define DRVSYS_CONTROL_POS_FREQ 1000
+#define DRVSYS_CONTROL_POS_PERIOD_US 3333 //ms //1000Hz
+#define DRVSYS_CONTROL_POS_FREQ 3000
 
 #define DRVSYS_CONTROL_ADMITTANCE_PERIOD_MS 10
 #define DRVSYS_PROCESS_TORQUE_SENSOR_PERIOD_MS 333
@@ -132,6 +132,8 @@ struct drvSys_parameters {
     float max_vel;
     drvSys_PID_Gains vel_pid_gains;
     drvSys_PID_Gains pos_pid_gains;
+    float joint_pos_P_gain;
+    float vel_ff_gain;
     drvSys_admittance_parameters admittance_gains;
     float limit_high_deg;
     float limit_low_deg;
@@ -340,7 +342,7 @@ void _drvSys_process_encoders_task(void* parameters);
 
 
 /* --- RTOS Controller Tasks --- */
-void _drvSys_position_controller_task(void* parameters);
+void _drvSys_PID_dual_controller_task(void* parameters);
 
 void _drvSys_velocity_controller_task(void* parameters);
 

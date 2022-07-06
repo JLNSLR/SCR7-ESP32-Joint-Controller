@@ -457,6 +457,8 @@ void _jctrl_cli_output_periodic() {
 
             Serial.print(state.joint_pos);
             Serial.print("\t");
+            Serial.print(state.motor_pos * inv_transmission);
+            Serial.print("\t");
             Serial.println(targets.pos_target);
 
         }

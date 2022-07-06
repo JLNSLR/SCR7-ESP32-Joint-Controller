@@ -156,7 +156,7 @@ TaskHandle_t drvSys_foc_th;
 TaskHandle_t drvSys_process_encoders_th;
 TaskHandle_t drvSys_torque_controller_th;
 TaskHandle_t drvSys_vel_controller_th;
-TaskHandle_t drvSys_pos_controller_th;
+TaskHandle_t drvSys_PID_dual_controller_th;
 TaskHandle_t drvSys_process_joint_encoder_th;
 TaskHandle_t drvSys_process_torque_sensor_th;
 TaskHandle_t drvSys_admittance_controller_th;
@@ -175,10 +175,14 @@ float drvSys_m_torque_commanded = 0;
 float drvSys_joint_torque_ref = 0.0;
 
 
+
+
 /*######## Feed Forward targets #############*/
 float drvSys_vel_ff = 0.0;
 float drvSys_torque_ff = 0.0;
 
+float drvSys_vel_ff_gain = 0.1;
+float drvSys_joint_pos_p_gain = 2.0;
 
 /* ####### Drive System Preferences ########### */
 
@@ -201,7 +205,7 @@ const char* drvSys_dynamic_params = "dynParams";
 /* Drive System Priority constants */
 enum drvSys_priorities {
     foc_prio = 10, process_sensor_prio = 9, torque_control_prio = 9,
-    vel_control_prio = 8, pos_control_prio = 7, admittance_control_prio = 6
+    pid_dual_control_prio = 8, admittance_control_prio = 6
 };
 
 /* ###############################################################
@@ -497,7 +501,7 @@ void _drvSys_load_parameters_from_Flash() {
 
     // load offset data;
     if (drvSys_read_encoder_offsets_from_Flash()) {
-        drvSys_joint_calibrated_flag = true;
+        drvSys_joint_calibrated_flag = false;
     }
     else {
         drvSys_joint_calibrated_flag = false;
@@ -536,8 +540,8 @@ void _drvSys_setup_FOC_Driver() {
 void drvSys_initialize() {
 
     /* Initial Controller Gains */
-    drvSys_PID_Gains pid_gains_pos = { .K_p = 0.0, .K_i = 0.0, .K_d = 0.0 };
-    drvSys_PID_Gains pid_gains_vel = { .K_p = 0.018, .K_i = 0.000, .K_d = 0.0 };
+    drvSys_PID_Gains pid_gains_pos = { .K_p = 0.0075, .K_i = 0.0, .K_d = 0.0 };
+    drvSys_PID_Gains pid_gains_vel = { .K_p = 0.00, .K_i = 0.000, .K_d = 0.0 };
 
     drvSys_admittance_parameters drvSys_admittance_gains;
     drvSys_admittance_gains.virtual_spring = 0.0;
@@ -554,6 +558,9 @@ void drvSys_initialize() {
     drvSys_parameter_config.admittance_gains = drvSys_admittance_gains;
     drvSys_parameter_config.limit_high_deg = DRVSYS_POS_LIMIT_HIGH;
     drvSys_parameter_config.limit_low_deg = DRVSYS_POS_LIMIT_LOW;
+
+    drvSys_parameter_config.vel_ff_gain = drvSys_vel_ff_gain;
+    drvSys_parameter_config.joint_pos_P_gain = drvSys_joint_pos_p_gain;
 
 
     /* Load Parameters from Flash */
@@ -719,6 +726,7 @@ void drvSys_initialize() {
     /* ---- create closed loop controller tasks, are not called until closed loop control is
 
 /* Create all the Static Controller Tasks */
+/*
     xTaskCreatePinnedToCore(
         _drvSys_velocity_controller_task,   // function name
         "Velocity_Controller_Task", // task name
@@ -728,13 +736,14 @@ void drvSys_initialize() {
         &drvSys_vel_controller_th,
         1 // task handle
     );
+    */
 
-    xTaskCreatePinnedToCore(_drvSys_position_controller_task,
+    xTaskCreatePinnedToCore(_drvSys_PID_dual_controller_task,
         "Position_Controller_Task",
         1000,
         NULL,
-        pos_control_prio,
-        &drvSys_pos_controller_th,
+        pid_dual_control_prio,
+        &drvSys_PID_dual_controller_th,
         1
     );
 
@@ -895,13 +904,14 @@ void _drvSys_setup_dual_controller() {
     /* Position Controller */
     drvSys_position_controller.setSampleTime(DRVSYS_CONTROL_POS_PERIOD_US);
     //Velocity Limitation
-    float max_velocity = drvSys_parameter_config.max_vel;
-    drvSys_position_controller.setOutputLimits(max_velocity * (-1.0), max_velocity);
+    float max_velocity = drvSys_parameter_config.max_torque_Nm;
+    drvSys_position_controller.setOutputLimits(torque_limit * (-1.0), torque_limit);
     drvSys_position_controller.setpoint = 0.0;
 
     drvSys_position_controller.Initialize();
     drvSys_position_controller.setMode(PID_MODE_INACTIVE);
     drvSys_position_controller.SetControllerDirection(PID_DIR_DIRECT);
+    drvSys_position_controller.setDifferentialFilter(true, 0.2);
 
     _drvSys_read_pos_PID_gains_from_flash();
 
@@ -1131,7 +1141,7 @@ void drvSys_set_target_pos(float pos) {
     else if (pos < drvSys_parameter_config.limit_low_deg) {
         pos = drvSys_parameter_config.limit_low_deg;
     }
-    drvSys_position_controller.setSetPoint(pos);
+    drvSys_pos_target = pos;
 
 };
 
@@ -1139,8 +1149,8 @@ drvSys_driveTargets drvSys_get_targets() {
     drvSys_driveTargets targets;
 
     targets.motor_torque_target = drvSys_foc_controller.target_torque;
-    targets.pos_target = drvSys_position_controller.setpoint;
-    targets.vel_target = drvSys_velocity_controller.setpoint;
+    targets.pos_target = drvSys_pos_target;
+    targets.vel_target = drvSys_vel_target;
     targets.ref_torque = drvSys_joint_torque_ref;
 
     return targets;
@@ -1179,12 +1189,13 @@ void IRAM_ATTR _drvSys_on_foc_timer() {
 
     if (drvSys_controller_state.state_flag == closed_loop_control_active) {
 
-
+        /*
         if (tickCount % drvSys_timer_vel_control_ticks == 0) {
             vTaskNotifyGiveFromISR(drvSys_vel_controller_th, &xHigherPriorityTaskWoken);
         }
+        */
         if (tickCount % drvSys_timer_pos_control_ticks == 0) {
-            vTaskNotifyGiveFromISR(drvSys_pos_controller_th, &xHigherPriorityTaskWoken);
+            vTaskNotifyGiveFromISR(drvSys_PID_dual_controller_th, &xHigherPriorityTaskWoken);
         }
     }
 
@@ -1305,8 +1316,10 @@ void _drvSys_velocity_controller_task(void* parameters) {
     }
 }
 
-void _drvSys_position_controller_task(void* parameters) {
+void _drvSys_PID_dual_controller_task(void* parameters) {
     uint32_t position_controller_processing_thread_notification;
+
+    static float inv_transmission = 1.0 / double(drvSys_constants.transmission_ratio);
 
     while (true) {
 
@@ -1316,17 +1329,47 @@ void _drvSys_position_controller_task(void* parameters) {
 
             if (drvSys_mode == dual_control || drvSys_mode == admittance_control) {
                 xSemaphoreTake(drvSys_mutex_motor_position, portMAX_DELAY);
-                float actual_pos = drvSys_motor_position;
+                float actual_pos_motor = drvSys_motor_position;
                 xSemaphoreGive(drvSys_mutex_motor_position);
 
-                drvSys_position_controller.input = actual_pos;
+                xSemaphoreTake(drvSys_mutex_joint_position, portMAX_DELAY);
+                float actual_pos_joint = drvSys_joint_position;
+                xSemaphoreGive(drvSys_mutex_joint_position);
+
+                xSemaphoreTake(drvSys_mutex_position_command, portMAX_DELAY);
+                float pos_target_joint = drvSys_pos_target;
+                xSemaphoreGive(drvSys_mutex_position_command);
+
+
+                float pos_setpoint = pos_target_joint + 3.0 * (pos_target_joint - actual_pos_joint);
+
+                drvSys_position_controller.setSetPoint(pos_setpoint, false);
+
+                drvSys_position_controller.input = actual_pos_motor * inv_transmission;
                 drvSys_position_controller.compute();
+
+
+                // Process Velocity Controller
+
+                xSemaphoreTake(drvSys_mutex_motor_vel, portMAX_DELAY);
+                float actual_vel = drvSys_motor_velocity;
+                xSemaphoreGive(drvSys_mutex_motor_vel);
+
+                drvSys_velocity_controller.setSetPoint(drvSys_vel_target, true);
+
+                drvSys_velocity_controller.input = actual_vel * inv_transmission;
+                drvSys_velocity_controller.compute();
+
+                /* Handle Velocity Controller Output */
+
+                float vel_pid_output_torque = 0;//drvSys_velocity_controller.output;
+
 
                 /* Handle controller output */
 
-                float velocity_target = drvSys_position_controller.output + drvSys_vel_ff;
+                float motor_torque_target = drvSys_position_controller.output + drvSys_vel_ff * drvSys_vel_ff_gain + vel_pid_output_torque;
 
-                drvSys_set_target_velocity(velocity_target);
+                drvSys_set_target_torque(motor_torque_target);
 
 
             }
@@ -1460,6 +1503,8 @@ bool drvSys_read_encoder_offsets_from_Flash() {
         drvSys_raw_joint_encoder_offset = drv_sys_preferences.getInt("joint", 0);
         drvSys_raw_motor_encoder_offset = drv_sys_preferences.getInt("motor", 0);
 
+        Serial.println(drvSys_raw_motor_encoder_offset);
+
         Serial.println("DRVSYS_INFO: Read Encoder Offsets from Flash.");
         drvSys_joint_calibrated_flag = true;
     }
@@ -1505,10 +1550,10 @@ bool drvSys_read_alignment_from_Flash() {
 
     if (saved_data_available) {
         drvSys_flip_global_alignment = drv_sys_preferences.getBool("glob_flip", false);
-        drvSys_flip_global_alignment = drv_sys_preferences.getFloat("tMotDir", 1.0);
-        drvSys_joint_encoder_dir_align = drv_sys_preferences.getFloat("jEncDir", 1.0);
-        drvSys_motor_encoder_dir_align = drv_sys_preferences.getFloat("mEncDir", 1.0);
-        drvSys_torque_dir_align = drv_sys_preferences.getFloat("SensDir", 1.0);
+        drvSys_flip_global_alignment = drv_sys_preferences.getFloat("tMotDir", DRVSYS_TORQUE_ALIGN_DIR);
+        drvSys_joint_encoder_dir_align = drv_sys_preferences.getFloat("jEncDir", DRVSYS_JOINT_ENC_ALIGN_DIR);
+        drvSys_motor_encoder_dir_align = drv_sys_preferences.getFloat("mEncDir", DRVSYS_MOTOR_ENC_ALIGN_DIR);
+        drvSys_torque_dir_align = drv_sys_preferences.getFloat("SensDir", DRVSYS_TORQUE_ALIGN_DIR);
 
         drvSys_axis_aligned_flag = true;
 

@@ -511,7 +511,7 @@ word AS5048A::read(word RegisterAddress, bool MeanValueMedian)
         readdata = (array_data[mid] + array_data[mid]) / 2;
       }
       else {
-        readdata = array_data[mid];
+        readdata = array_data[mid+1];
       }
 
 
