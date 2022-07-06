@@ -32,21 +32,26 @@ void setup()
   SPI.begin();
   xSemaphoreGive(glob_SPI_mutex);
   xSemaphoreGive(glob_Serial_mutex);
+
+
+
+  // Setup LEDs 
   FastLED.addLeds<NEOPIXEL, RGB_LED_PIN>(leds, 1);
   leds[0] = CRGB::GreenYellow;
   FastLED.setBrightness(255);
   FastLED.show();
 
+
+  // Initialize Command-Line-Interface (CLI)
   cli_init();
 
 
-
-  //drvSys_initialize();
+  // Initialize Drive System 
+  drvSys_initialize();
 
   Serial.println("JCTRL_INFO: Setting up Drive System succesful. Starting FOC-Controller.");
-  //drvSys_start_foc_processing();
+  drvSys_start_foc_processing();
 
-  //jCtrl_CLI_start_interface();
 
   //drvSys_start_motion_control(cascade_position_control);
 

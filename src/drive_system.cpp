@@ -90,7 +90,7 @@ TMC2160Stepper drvSys_driver(CS_TMC, R_SENSE);
 /* Dynamic Kalman Filter */
 //DriveDynamicKalmanFilter kalman_filter(DRVSYS_FOC_PERIOD_US * 1e-6, DRVSYS_TRANSMISSION_RATIO);
 KinematicKalmanFilter motor_kinematic_kalman_filter(DRVSYS_FOC_PERIOD_US * 1e-6);
-KinematicKalmanFilter joint_kinematic_kalman_filter(DRVSYS_CONTROL_POS_PERIOD_US * 1e-6);
+KinematicKalmanFilter joint_kinematic_kalman_filter(DRVSYS_PROCESS_ENCODERS_PERIOD_US * 1e-6);
 
 /* FOC Controller */
 FOCController drvSys_foc_controller(&drvSys_magnetic_motor_encoder, &drvSys_driver, DRVSYS_PHASE_CURRENT_MAX_mA, DRVSYS_TORQUE_CONSTANT, glob_SPI_mutex);
@@ -200,8 +200,8 @@ const char* drvSys_dynamic_params = "dynParams";
 
 /* Drive System Priority constants */
 enum drvSys_priorities {
-    foc_prio = 10, process_sensor_prio = 9, torque_control_prio = 8,
-    vel_control_prio = 7, pos_control_prio = 6, admittance_control_prio = 5
+    foc_prio = 10, process_sensor_prio = 9, torque_control_prio = 9,
+    vel_control_prio = 8, pos_control_prio = 7, admittance_control_prio = 6
 };
 
 /* ###############################################################
@@ -636,8 +636,9 @@ void drvSys_initialize() {
     motor_kinematic_kalman_filter.init(DRVSYS_PROCESS_ENCODERS_PERIOD_US * 1e-6);
     joint_kinematic_kalman_filter.init(DRVSYS_PROCESS_ENCODERS_PERIOD_US * 1e-6);
 
-    joint_kinematic_kalman_filter.accel_change = 0.01;
-    motor_kinematic_kalman_filter.accel_change = 1.0;
+
+    joint_kinematic_kalman_filter.setAccelChange(0.01);
+    motor_kinematic_kalman_filter.setAccelChange(4.0);
 
     // Initialize Notch Filters
     drvSys_notch_filters.notch_0_active = DRVSYS_NOTCH_0_ACTIVE;
@@ -827,7 +828,7 @@ int32_t drvSys_start_motion_control(drvSys_controlMode control_mode) {
 
     }
 
-    if (drvSys_controller_state.state_flag == closed_loop_control_inactive) {
+    if (drvSys_controller_state.state_flag == closed_loop_control_inactive || drvSys_controller_state.state_flag == foc_direct_torque) {
 
         Serial.println("DRVSYS_INFO: Start Closed Loop Motion Control.");
         drvSys_mode = control_mode;
@@ -879,11 +880,12 @@ void _drvSys_setup_dual_controller() {
     drvSys_velocity_controller.setOutputLimits(torque_limit * (-1.0), torque_limit);
     drvSys_velocity_controller.setpoint = 0.0;
 
+
     drvSys_velocity_controller.Initialize();
     drvSys_velocity_controller.setMode(PID_MODE_INACTIVE);
     drvSys_velocity_controller.SetControllerDirection(PID_DIR_DIRECT);
-    drvSys_velocity_controller.setErrorDeadBand(0.01);
-    drvSys_velocity_controller.setOutputFilter(true, 0.5);
+    drvSys_velocity_controller.setErrorDeadBand(2.0);
+    drvSys_velocity_controller.setOutputFilter(true, 0.1);
 
     _drvSys_read_vel_PID_gains_from_flash();
 
@@ -977,6 +979,17 @@ void drvSys_stop_controllers() {
     Serial.println("DRVSYS_INFO: Stopped Closed Loop Controllers");
 
 };
+
+void drvSys_set_kalman_filter_acc_noise(float acc_noise, bool joint) {
+
+
+    if (joint) {
+        joint_kinematic_kalman_filter.setAccelChange(acc_noise);
+    }
+    else {// motor
+        motor_kinematic_kalman_filter.setAccelChange(acc_noise);
+    }
+}
 
 void drvSys_set_notch_filters(int filter_id, float notch_frequ, float bandwidth_f, bool activate) {
 
@@ -1105,7 +1118,7 @@ void drvSys_set_target_velocity(float vel) {
     else if (vel < (-1.0) * drvSys_parameter_config.max_vel) {
         vel = (-1.0) * drvSys_parameter_config.max_vel;
     }
-    drvSys_velocity_controller.setpoint = vel;
+    drvSys_vel_target = vel;
 
 };
 
@@ -1118,7 +1131,8 @@ void drvSys_set_target_pos(float pos) {
     else if (pos < drvSys_parameter_config.limit_low_deg) {
         pos = drvSys_parameter_config.limit_low_deg;
     }
-    drvSys_position_controller.setpoint = pos;
+    drvSys_position_controller.setSetPoint(pos);
+
 };
 
 drvSys_driveTargets drvSys_get_targets() {
@@ -1275,6 +1289,8 @@ void _drvSys_velocity_controller_task(void* parameters) {
                     float actual_vel = drvSys_motor_velocity;
                     xSemaphoreGive(drvSys_mutex_motor_vel);
 
+                    drvSys_velocity_controller.setSetPoint(drvSys_vel_target, true);
+
                     drvSys_velocity_controller.input = actual_vel * inv_transmission;
                     drvSys_velocity_controller.compute();
 
@@ -1348,8 +1364,6 @@ void _drvSys_torque_controller_task(void* parameters) {
             }
             */
 
-            Serial.print("troque: ");
-            Serial.println(drvSys_m_torque_commanded);
             drvSys_foc_controller.set_target_torque(drvSys_m_torque_commanded);
             xSemaphoreGive(drvSys_mutex_motor_commanded_torque);
 

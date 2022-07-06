@@ -22,11 +22,15 @@ void PIDController::compute()
     /* Compute error variables */
     float error = setpoint - input;
 
+
+    iTerm += ki * error;
+
     if (fabs(error) < errorDeadBand)
     {
         error = 0.0;
     }
-    iTerm += ki * error;
+
+
 
     // Clamp iTerm against windup
     if (iTerm > outMax)
@@ -72,6 +76,22 @@ void PIDController::compute()
 
     /* Save Variables for next step */
 };
+
+
+void PIDController::setSetPoint(float setpoint, bool reset_I) {
+
+    static float prev_setpoint = 0;
+    if (reset_I) {
+
+        if (prev_setpoint != setpoint) {
+            iTerm = 0.0;
+        }
+        prev_setpoint = setpoint;
+
+    }
+
+    this->setpoint = setpoint;
+}
 
 void PIDController::computePeriodic()
 {

@@ -21,7 +21,9 @@ bool jctrl_cli_process_drive_sys_command(char(*cli_arg)[N_MAX_ARGS]);
 
 bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]);
 
-void _jctrl_feedback_output(String output);
+bool jctrl_cli_process_adapt_kalman(char(*cli_arg)[N_MAX_ARGS]);
+
+void _jctrl_cli_feedback_output(String output);
 
 void _jctrl_cli_output_periodic();
 

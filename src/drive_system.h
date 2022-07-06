@@ -29,8 +29,8 @@
 /* --- Timing Constants --- */
 
 #define DRVSYS_FOC_PERIOD_US 200 //us -> 5kHz
-#define DRVSYS_PROCESS_ENCODERS_PERIOD_US 333 //us -> 4kHz
-#define DRVSYS_PROCESS_ENCODERS_FREQU 3000 //Hz
+#define DRVSYS_PROCESS_ENCODERS_PERIOD_US 250 //us -> 3kHz
+#define DRVSYS_PROCESS_ENCODERS_FREQU 4000 //Hz
 #define DRVSYS_CONTROL_TORQUE_PERIOD_US 333 // us 
 #define DRVSYS_CONTROL_TORQUE_FREQU 3000 // Hz
 #define DRVSYS_CONTROL_VEL_PERIOD_US 333 //us //600Hz
@@ -233,6 +233,7 @@ void drvSys_set_target_velocity(float vel);
 
 void drvSys_set_target_pos(float angle);
 
+void drvSys_set_kalman_filter_acc_noise(float acc_noise, bool joint);
 drvSys_driveTargets drvSys_get_targets();
 
 void drvSys_set_feed_forward_torque(float torque_ff);

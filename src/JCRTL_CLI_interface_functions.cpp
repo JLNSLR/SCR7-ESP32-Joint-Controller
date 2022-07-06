@@ -9,7 +9,7 @@ bool jcrtl_cli_feedback = true;
 
 bool cli_output_active = false;
 
-void _jctrl_feedback_output(String output) {
+void _jctrl_cli_feedback_output(String output) {
 
     if (jcrtl_cli_feedback) {
         Serial.print("DRVSYS_CLI: ");
@@ -26,7 +26,7 @@ bool jctrl_cli_process_torque_command(char(*cli_arg)[N_MAX_ARGS]) {
 
     bool processed = false;
 
-    if (strcmp(keyword, "torque") == 0 || strcmp(keyword, "t")) {
+    if (strcmp(keyword, "torque") == 0 || strcmp(keyword, "t") == 0) {
         processed = true;
 
         if (strcmp(cli_arg[1], "notch") == 0) {
@@ -45,16 +45,16 @@ bool jctrl_cli_process_torque_command(char(*cli_arg)[N_MAX_ARGS]) {
 
             if (filter_id > 1) {
 
-                _jctrl_feedback_output("Notch Filer ID not valid.");
+                _jctrl_cli_feedback_output("Notch Filer ID not valid.");
 
                 error = true;
             }
             if (frequ > 1000.0 || frequ < 0) {
-                _jctrl_feedback_output("Notch Filer ID not valid.");
+                _jctrl_cli_feedback_output("Notch Filer ID not valid.");
                 error = true;
             }
             if (bandwidth > 1000) {
-                _jctrl_feedback_output("Notch Filter bandwidth not valid");
+                _jctrl_cli_feedback_output("Notch Filter bandwidth not valid");
                 error = true;
             }
 
@@ -62,10 +62,10 @@ bool jctrl_cli_process_torque_command(char(*cli_arg)[N_MAX_ARGS]) {
                 drvSys_set_notch_filters(filter_id, frequ, bandwidth, active);
 
                 if (active) {
-                    _jctrl_feedback_output("Notch Filter activated.");
+                    _jctrl_cli_feedback_output("Notch Filter activated.");
                 }
                 else {
-                    _jctrl_feedback_output("Notch Filter deactivated.");
+                    _jctrl_cli_feedback_output("Notch Filter deactivated.");
                 }
                 return processed;
             }
@@ -79,7 +79,7 @@ bool jctrl_cli_process_torque_command(char(*cli_arg)[N_MAX_ARGS]) {
             target_torque = atof(cli_arg[1]);
 
 
-            //jctrl_cli_feedback_output("Torque command: " + String(target_torque) + "Nm.");
+            _jctrl_cli_feedback_output("Torque command: " + String(target_torque) + " Nm.");
             drvSys_set_target_torque(target_torque);
             return processed;
         }
@@ -143,18 +143,18 @@ bool jctrl_cli_process_pid_command(char(*cli_arg)[N_MAX_ARGS]) {
 
             if (strcmp(keyword_3, "gains") == 0 || strcmp(keyword_3, "g") == 0) {
 
-                float p_val = atof(cli_arg[4]);
-                float i_val = atof(cli_arg[5]);
-                float d_val = atof(cli_arg[6]);
+                float p_val = atof(cli_arg[3]);
+                float i_val = atof(cli_arg[4]);
+                float d_val = atof(cli_arg[5]);
 
                 bool save = false;
 
-                if (strcmp(cli_arg[7], "s") == 0) {
+                if (strcmp(cli_arg[5], "s") == 0) {
                     save = true;
-                    _jctrl_feedback_output("Saved position PID gains to: " + String(p_val) + ", " + String(i_val) + ", " + String(d_val) + ".");
+                    _jctrl_cli_feedback_output("Saved position PID gains to: " + String(p_val) + ", " + String(i_val) + ", " + String(d_val) + ".");
                 }
                 else {
-                    _jctrl_feedback_output("Set position PID gains to: " + String(p_val) + ", " + String(i_val) + ", " + String(d_val) + ".");
+                    _jctrl_cli_feedback_output("Set position PID gains to: " + String(p_val) + ", " + String(i_val) + ", " + String(d_val) + ".");
                 }
 
                 drvSys_set_pos_PID_gains(p_val, i_val, d_val, save);
@@ -169,7 +169,7 @@ bool jctrl_cli_process_pid_command(char(*cli_arg)[N_MAX_ARGS]) {
                 if (filter_alpha < 0 || deadzone < 0 || filter_alpha > 1.0) {
                     error = true;
                     return processed;
-                    _jctrl_feedback_output("Invalid PID settings.");
+                    _jctrl_cli_feedback_output("Invalid PID settings.");
                 }
 
                 drvSys_set_advanced_PID_settings(0, filter_alpha, deadzone, active);
@@ -181,18 +181,18 @@ bool jctrl_cli_process_pid_command(char(*cli_arg)[N_MAX_ARGS]) {
 
             if (strcmp(keyword_3, "gains") == 0 || strcmp(keyword_3, "g") == 0) {
 
-                float p_val = atof(cli_arg[4]);
-                float i_val = atof(cli_arg[5]);
-                float d_val = atof(cli_arg[6]);
+                float p_val = atof(cli_arg[3]);
+                float i_val = atof(cli_arg[4]);
+                float d_val = atof(cli_arg[5]);
 
                 bool save = false;
 
-                if (strcmp(cli_arg[7], "s") == 0) {
+                if (strcmp(cli_arg[6], "s") == 0) {
                     save = true;
-                    _jctrl_feedback_output("Saved velocity PID gains to: " + String(p_val) + ", " + String(i_val) + ", " + String(d_val) + ".");
+                    _jctrl_cli_feedback_output("Saved velocity PID gains to: " + String(p_val) + ", " + String(i_val) + ", " + String(d_val) + ".");
                 }
                 else {
-                    _jctrl_feedback_output("Set velocity PID gains to: " + String(p_val) + ", " + String(i_val) + ", " + String(d_val) + ".");
+                    _jctrl_cli_feedback_output("Set velocity PID gains to: " + String(p_val) + ", " + String(i_val) + ", " + String(d_val) + ".");
                 }
 
                 drvSys_set_vel_PID_gains(p_val, i_val, d_val, save);
@@ -208,7 +208,7 @@ bool jctrl_cli_process_pid_command(char(*cli_arg)[N_MAX_ARGS]) {
                 if (filter_alpha < 0 || deadzone < 0 || filter_alpha > 1.0) {
                     error = true;
 
-                    _jctrl_feedback_output("Invalid PID settings.");
+                    _jctrl_cli_feedback_output("Invalid PID settings.");
                     return processed;
                 }
 
@@ -242,17 +242,17 @@ bool jctrl_cli_process_drive_sys_command(char(*cli_arg)[N_MAX_ARGS]) {
             if (mode == 0) {
                 drvSys_start_motion_control(dual_control);
 
-                _jctrl_feedback_output("Started motion control in dual control mode.");
+                _jctrl_cli_feedback_output("Started motion control in dual control mode.");
                 return processed;
             }
             if (mode == 1) {
                 drvSys_start_motion_control(direct_torque);
-                _jctrl_feedback_output("Started motion control in direct torque mode.");
+                _jctrl_cli_feedback_output("Started motion control in direct torque mode.");
                 return processed;
             }
             if (mode == 2) {
                 drvSys_start_motion_control(admittance_control);
-                _jctrl_feedback_output("Started motion control in admittance control mode.");
+                _jctrl_cli_feedback_output("Started motion control in admittance control mode.");
                 return processed;
             }
 
@@ -261,7 +261,7 @@ bool jctrl_cli_process_drive_sys_command(char(*cli_arg)[N_MAX_ARGS]) {
 
     if (strcmp(keyword, "stop") == 0) {
         drvSys_stop_controllers();
-        _jctrl_feedback_output("Stopped motion controllers.");
+        _jctrl_cli_feedback_output("Stopped motion controllers.");
         return processed;
     }
 
@@ -274,6 +274,8 @@ bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]) {
     char* keyword = cli_arg[0];
     bool processed = false;
 
+
+
     inv_transmission = 1.0 / drvSys_get_constants().transmission_ratio;
 
     if (strcmp(keyword, "out") == 0) {
@@ -283,6 +285,12 @@ bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]) {
         if (strcmp(mode, "all") == 0) {
             cli_output_active = true;
             cli_out_mode = all;
+
+            Serial.print("keyword: ");
+            Serial.println(keyword);
+            Serial.print("mode: ");
+            Serial.println(mode);
+
             return processed;;
         }
 
@@ -310,6 +318,31 @@ bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]) {
             cli_output_active = true;
             cli_out_mode = tune_pos;
             return processed;
+        }
+
+    }
+    return processed;
+}
+
+bool jctrl_cli_process_adapt_kalman(char(*cli_arg)[N_MAX_ARGS]) {
+
+    char* keyword = cli_arg[0];
+    bool processed = false;
+
+
+
+    if (strcmp(keyword, "kalman") == 0) {
+        processed = true;
+        char* acc = cli_arg[1];
+        char* type = cli_arg[2];
+
+        float acc_noise = atof(acc);
+
+        if (strcmp(type, "0") == 0) {
+            drvSys_set_kalman_filter_acc_noise(acc_noise, false);
+        }
+        else {
+            drvSys_set_kalman_filter_acc_noise(acc_noise, true);
         }
 
     }
@@ -398,9 +431,9 @@ void _jctrl_cli_output_periodic() {
             Serial.print("\t");
             Serial.print(targets.vel_target);
             Serial.print("\t");
-            Serial.println(targets.motor_torque_target);
+            Serial.print(targets.motor_torque_target);
             Serial.print("\t");
-            Serial.println(0); // Motor Temperature
+            Serial.print(0); // Motor Temperature
             Serial.print("\t");
             Serial.println(0); // Hall Sensor
 

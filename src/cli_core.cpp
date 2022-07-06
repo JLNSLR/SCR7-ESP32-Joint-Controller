@@ -38,7 +38,7 @@ void cli_read_line_cmd() {
     String line_string;
 
     if (Serial.available()) {
-        line_string = Serial.readStringUntil('\n');
+        line_string = Serial.readStringUntil(';');
         if (line_string.length() < LINE_BUF_SIZE) {
             line_string.toCharArray(cli_line, LINE_BUF_SIZE);
 #ifdef CLI_DEBUG
@@ -74,6 +74,7 @@ void cli_parse_line_cmd() {
         }
     }
 
+
 #ifdef CLI_DEBUG
     for (int i = 0; i < counter; i++) {
         Serial.println(cli_args[i]);
@@ -104,6 +105,10 @@ void cli_execute_line_cmd() {
     if (!processed_cmd) {
         processed_cmd = jctrl_cli_process_output_command(cli_args);
     }
+    if (!processed_cmd) {
+        processed_cmd = jctrl_cli_process_adapt_kalman(cli_args);
+    }
+
 
 
 

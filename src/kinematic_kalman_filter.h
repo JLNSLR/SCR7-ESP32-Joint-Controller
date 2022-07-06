@@ -34,11 +34,14 @@ public:
     void predictionStep();
     void predictionStep(float motor_torque);
     void correctionStep();
+    void correctionStep_vel(float vel);
 
     KinematicStateVector getEstimatedState();
     KinematicStateVector estimateStates(float position_sensor_val);
 
     KinematicNoiseVector noise;
+
+    void setAccelChange(float accel_change);
 
     float delta_t = 250e-6;
 
@@ -57,8 +60,10 @@ private:
     BLA::Matrix<3, 3> kalman_Gain;
     BLA::Matrix<3, 3> errorCovariance;
     BLA::Matrix<3, 3> system_noise_matrix;
+    BLA::Matrix<3, 3> system_noise_matrix_prototype;
 
     BLA::Matrix<3, 3> observer_matrix_H;
+    BLA::Matrix<3, 3> observer_matrix_H_vel;
 
     BLA::Matrix<3, 3> identity_matrix;
 

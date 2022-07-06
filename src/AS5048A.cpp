@@ -458,8 +458,10 @@ bool AS5048A::error()
  */
 word AS5048A::read(word RegisterAddress, bool MeanValueMedian)
 {
+
+  const int n_median = 5;
   word readdata;
-  word array_data[16];
+  word array_data[n_median];
   word command = 0b0100000000000000; // PAR=0 R/W=R
 
   command |= RegisterAddress;
@@ -486,18 +488,39 @@ word AS5048A::read(word RegisterAddress, bool MeanValueMedian)
   if (MeanValueMedian == true)
   {
 
-    for (byte i = 0; i < 16; i++)
+    for (byte i = 0; i < n_median; i++)
     {
       digitalWrite(_cs, LOW);
       array_data[i] = SPI.transfer16(command) & ~0xC000;
       digitalWrite(_cs, HIGH);
       // Serial.println(array_data[i], BIN);
     }
-
-    AS5048A::quickSort(array_data, 0, 15);
-    readdata = (array_data[8] + array_data[9]) / 2;
-
     SPI.endTransaction();
+
+
+    // Apply Median-Filtering
+    for (int i = 0; i < n_median - 1; i++) {
+      if (array_data[i + 1] < array_data[i]) {
+        int tmp = array_data[i];
+        array_data[i] = array_data[i + 1];
+        array_data[i + 1] = tmp;
+      }
+
+      int mid = n_median / 2;
+      if (n_median % 2 == 0) {
+        readdata = (array_data[mid] + array_data[mid]) / 2;
+      }
+      else {
+        readdata = array_data[mid];
+      }
+
+
+    }
+
+    //AS5048A::quickSort(array_data, 0, 15);
+    //readdata = (array_data[8] + array_data[9]) / 2;
+
+
     // SPI - end transaction
 
     // Return the data, stripping the parity and error bits

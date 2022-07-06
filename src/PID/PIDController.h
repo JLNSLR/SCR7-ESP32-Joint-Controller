@@ -43,6 +43,9 @@ public:
 
     void setErrorDeadBand(float const deadband);
 
+    void setSetPoint(float setpoint, bool reset_I = false);
+
+
     /* ---  working variables --- */
 
     float input, output, setpoint;

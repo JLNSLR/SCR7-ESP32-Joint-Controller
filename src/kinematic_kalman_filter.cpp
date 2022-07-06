@@ -29,6 +29,8 @@ void KinematicKalmanFilter::init(float delta_t) {
 
     observer_matrix_H.Fill(0);
     observer_matrix_H(0, 0) = 1;
+    observer_matrix_H_vel.Fill(0);
+    observer_matrix_H_vel(1, 1) = 1;
 
 
     //initial error covariance_matrix;
@@ -57,6 +59,8 @@ void KinematicKalmanFilter::init(float delta_t) {
     system_noise_matrix(2, 1) = delta_t;
     system_noise_matrix(2, 2) = 1;
 
+    system_noise_matrix_prototype = system_noise_matrix;
+
 
     float acc_value = accel_change; //DEG
 
@@ -78,7 +82,7 @@ void KinematicKalmanFilter::init(float delta_t) {
     identity_matrix(1, 1) = 1;
     identity_matrix(2, 2) = 1;
 
-    sensor_noise = 0.05;
+    sensor_noise = 0.05; // DEG
 
 
     /*
@@ -131,6 +135,30 @@ void KinematicKalmanFilter::correctionStep() {
 
 };
 
+void KinematicKalmanFilter::correctionStep_vel(float velocity_derivative) {
+
+    //Estimate Kalman Gain
+    float derivative_noise = 3.0;
+
+    float divisor = 1.0 / (errorCovariance(1, 1) + derivative_noise);
+
+    BLA::Matrix<3, 3> observer_matrix_H_vel;
+    observer_matrix_H_vel.Fill(0);
+
+    kalman_Gain = errorCovariance * (~observer_matrix_H_vel) * divisor;
+
+    BLA::Matrix<3> z_n;
+    z_n.Fill(0);
+    z_n(1) = velocity_derivative;
+
+    x_corrected = x_current + kalman_Gain * (z_n - observer_matrix_H_vel * x_current);
+
+    errorCovariance = (identity_matrix - kalman_Gain * observer_matrix_H_vel) * errorCovariance;
+
+    x_current = x_corrected;
+
+};
+
 KinematicStateVector KinematicKalmanFilter::getEstimatedState() {
     KinematicStateVector state;
 
@@ -144,13 +172,39 @@ KinematicStateVector KinematicKalmanFilter::getEstimatedState() {
 
 KinematicStateVector KinematicKalmanFilter::estimateStates(float position_sensor_val) {
 
+    /*
+    static float prev_position_sensor_val = 0;
+    static float divisor = 1.0 / delta_t;
+    static float prev_vel_derivative = 0;
+
+    static const float alpha = 0.5;
+    */
+
+
     this->position_sensor_val = position_sensor_val;
+
+    /*
+    float velocity_derivative = (position_sensor_val - prev_position_sensor_val) * divisor;
+
+    velocity_derivative = velocity_derivative * alpha + prev_vel_derivative * (1.0 - alpha);
+    */
+
+
 
     predictionStep();
 
     correctionStep();
+    //correctionStep_vel(velocity_derivative);
 
     return getEstimatedState();
 
 
 };
+
+void KinematicKalmanFilter::setAccelChange(float accel_change) {
+
+    this->accel_change = accel_change;
+
+    system_noise_matrix = system_noise_matrix_prototype * accel_change * accel_change;
+
+}
