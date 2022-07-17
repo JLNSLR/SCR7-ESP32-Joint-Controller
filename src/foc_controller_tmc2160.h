@@ -13,9 +13,13 @@
 
 #define RAD2_14BITINT 2607.435
 
+#define N_MOTOR_POLE_PAIRS 50 //Standard Nema17 Nema23 Stepper Motor
+
 //#define FOC_EMPIRIC_PHASE_ANGLE_OFFSET 15710//15715 //
 
 #define FOC_DEBUG
+
+
 
 
 class FOCController
@@ -34,7 +38,7 @@ public:
     TMC2160Stepper* driver;
     int16_t max_current_mA;
     float max_torque = 0;
-    int N_pole_pairs = 50;
+    const int N_pole_pairs = N_MOTOR_POLE_PAIRS;
 
     void set_empiric_phase_shift_factor(float factor);
 

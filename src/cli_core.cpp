@@ -97,7 +97,7 @@ void cli_execute_line_cmd() {
         processed_cmd = jctrl_cli_process_position_command(cli_args);
     }
     if (!processed_cmd) {
-        processed_cmd = jctrl_cli_process_velocity_command(cli_args);
+        processed_cmd = jctrl_cli_process_nn_commands(cli_args);
     }
     if (!processed_cmd) {
         processed_cmd = jctrl_cli_process_pid_command(cli_args);
@@ -107,6 +107,9 @@ void cli_execute_line_cmd() {
     }
     if (!processed_cmd) {
         processed_cmd = jctrl_cli_process_adapt_kalman(cli_args);
+    }
+    if (!processed_cmd) {
+        //processed_cmd = jctrl_cli_process_motion_planner_commands(cli_args);
     }
 
 

@@ -19,14 +19,13 @@ public:
     PIDController(float kp, float ki, float kd);
 
     void compute();
-    void computePeriodic();
     void setTuning(float kp, float ki, float kd);
 
     // set sampleTime in us
-    void setSampleTime(int newSampleTime);
+    void setSampleTime(int newSampleTime_us);
 
     void setOutputLimits(float min, float max);
-
+    //activates or deactives the controller
     void setMode(int Mode);
 
     void Initialize();
@@ -37,7 +36,7 @@ public:
     // sets the filter for D-Term
     void setDifferentialFilter(bool isActive, float alpha = 0.5);
     // sets the filter for output
-    void setOutputFilter(bool isActive, float alpha = 0.5);
+    void setInputFilter(bool isActive, float alpha = 0.5);
 
     bool getMode();
 
@@ -51,29 +50,34 @@ public:
     float input, output, setpoint;
     float outMin, outMax;
 
+    float error;
+    float prev_error;
+    float prev_error_t2;
+    float dError;
+    float iTerm;
+
+    bool derivative_on_measurement = true;
+
+    float gains[3];
+
 private:
     float kp, ki, kd;
-    float ki_samp, kd_samp;
-    float iTerm, lastInput;
+    float lastInput;
 
     // sample time in microseconds
     int sampleTime; // microseconds
 
-    unsigned long lastTime;
-
     bool isActive = true;
     bool filterDerivative = false;
-
     bool outputFilter = false;
 
     float errorNoise = 0;
-
     float errorDeadBand = 0;
 
     int controllerDirection = PID_DIR_DIRECT;
 
-    float expon_filter_alpha = 0.5;
-    float output_exp_filter_alpha = 0.5;
+    float d_filter_alpha = 0.5;
+    float input_exp_filter_alpha = 0.5;
 };
 
 #endif // PIDCONTROLLER_H

@@ -2,6 +2,7 @@
 #include <joint_control_global_def.h>
 #include <FreeRTOS.h>
 
+/*
 CANInterface::CANInterface() {
     CAN.setPins(CAN_RX, CAN_TX);
     if (!CAN.begin(1000E3)) {
@@ -100,7 +101,7 @@ void CANInterface::send_drive_torque_data() {
 }
 
 void CANInterface::send_drive_controllersys_state() {
-    drvSys_controllerState ctrl_state_drive = drvSys_get_controllerState();
+    drvSys_controllerCondition ctrl_state_drive = drvSys_get_controllerState();
 
     drvComm_ControllerState ctrl_state_data;
 
@@ -161,15 +162,15 @@ void CANInterface::process_motion_command(drvComm_MotionCmd motion_cmd) {
 
             drvSys_set_feed_forward_torque(torque_ff);
             drvSys_set_feed_forward_velocity(vel_ff);
-            drvSys_set_target_pos(target_pos);
+            _drvSys_set_target_pos(target_pos);
         }
     }
 
-    if (motion_cmd.type = direct_command) {
+    if (motion_cmd.type == direct_command) {
         if (drvSys_mode == direct_torque) {
             float target_torque = float(motion_cmd.direct_target.m_torque_target) * motor_torque_factor;
 
-            drvSys_set_target_torque(target_torque);
+            _drvSys_set_target_torque(target_torque);
         }
     }
 
@@ -188,9 +189,9 @@ void CANInterface::process_update_PID_command(drvComm_PID_update pid_update) {
     if (pid_update.PID_t == 0) {
         // Position Controller
 
-        float P = params.pos_pid_gains.K_p;
-        float I = params.pos_pid_gains.K_i;
-        float D = params.pos_pid_gains.K_d;
+        float P = params.pid_gains.K_p;
+        float I = params.pid_gains.K_i;
+        float D = params.pid_gains.K_d;
 
         if (pid_update.PID_K == 0) {
             P = pid_update.gain * PID_GAIN_VAL_FACTOR;
@@ -362,4 +363,5 @@ void process_drive_sys_parameter_command(drvComm_paramsCmd params_cmd) {
 
 
 
-//void 
+//void
+*/

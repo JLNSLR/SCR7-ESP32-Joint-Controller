@@ -1,6 +1,19 @@
 #include "PIDController.h"
 
-PIDController::PIDController() : input(0), output(0), kp(0), ki(0), kd(0), iTerm(0), lastInput(0), sampleTime(1), lastTime(0), isActive(true) {
+PIDController::PIDController() {
+
+    input = 0;
+    output = 0;
+    setpoint = 0;
+    error = 0;
+    prev_error = 0;
+    prev_error_t2 = 0;
+    dError = 0;
+    iTerm = 0;
+    kp = 0;
+    kd = 0;
+    ki = 0;
+
 
 };
 
@@ -20,17 +33,22 @@ void PIDController::compute()
     }
 
     /* Compute error variables */
-    float error = setpoint - input;
+    error = setpoint - input;
+
+    /* Compute Output Filter */
+    if (outputFilter)
+    {
+        error = error * input_exp_filter_alpha + prev_error * (1 - input_exp_filter_alpha);
+
+    }
 
 
-    iTerm += ki * error;
+    iTerm += error;
 
     if (fabs(error) < errorDeadBand)
     {
         error = 0.0;
     }
-
-
 
     // Clamp iTerm against windup
     if (iTerm > outMax) {
@@ -42,33 +60,36 @@ void PIDController::compute()
 
     static float prev_dInput = 0;
 
-    float dInput = input - lastInput;
+    float dError;
 
-    if (fabs(dInput) < errorDeadBand)
-    {
-        dInput = 0;
+    if (derivative_on_measurement) {
+        dError = (-1.0) * (input - lastInput);
     }
+    else {
+        dError = error - prev_error;
+    }
+
+    prev_error_t2 = prev_error;
+    prev_error = error;
+
+
+    if (fabs(dError) < errorDeadBand)
+    {
+        dError = 0;
+    }
+
 
     /* Compute Derivative Filter */
     if (filterDerivative)
     {
-        dInput = dInput * expon_filter_alpha + prev_dInput * (1 - expon_filter_alpha);
-        prev_dInput = dInput;
+        dError = dError * d_filter_alpha + prev_dInput * (1 - d_filter_alpha);
+        prev_dInput = dError;
     }
-
-    static float prev_output = 0;
 
     /* Compute PID Output */
 
-    output = kp * error + iTerm - kd * dInput;
+    output = kp * error + ki * iTerm + kd * dError;
 
-    /* Compute Output Filter */
-    if (outputFilter)
-    {
-        output = output * output_exp_filter_alpha + prev_output * (1 - output_exp_filter_alpha);
-
-        prev_output = output;
-    }
 
     // Clamp output against windup
     if (output > outMax)
@@ -95,45 +116,6 @@ void PIDController::setSetPoint(float setpoint, bool reset_I) {
     this->setpoint = setpoint;
 }
 
-void PIDController::computePeriodic()
-{
-    if (!isActive)
-        return;
-    unsigned long now = micros();
-
-    int timeChange = now - lastTime;
-
-    if (timeChange >= sampleTime)
-    {
-
-        /* Compute error variables */
-        float error = setpoint - input;
-        iTerm += ki * error;
-
-        // Clamp iTerm against windup
-        if (iTerm > outMax)
-            iTerm = outMax;
-        else if (iTerm < outMin)
-            iTerm = outMin;
-
-        float dInput = input - lastInput;
-
-        /* Compute PID Output */
-
-        output = kp * error + iTerm - kd * dInput;
-
-        // Clamp output against windup
-        if (output > outMax)
-            output = outMax;
-        else if (output < outMin)
-            output = outMin;
-
-        /* Save Variables for next step */
-        lastInput = input;
-        lastTime = now;
-    }
-}
-
 void PIDController::setTuning(float kp, float ki, float kd)
 {
 
@@ -141,6 +123,11 @@ void PIDController::setTuning(float kp, float ki, float kd)
         return;
 
     float sampleTimeInSec = ((float)sampleTime / (1000 * 1000));
+
+
+    gains[0] = kp;
+    gains[1] = ki;
+    gains[2] = kd;
 
     this->kp = kp;
     this->ki = ki * sampleTimeInSec;
@@ -217,7 +204,9 @@ float* PIDController::getGains()
 {
 
     float sampleTimeInSec = ((float)sampleTime / (1000 * 1000));
-    float gains[3] = { kp, ki / sampleTimeInSec, kd * sampleTimeInSec };
+    gains[0] = kp;
+    gains[1] = ki / sampleTimeInSec;
+    gains[2] = kd * sampleTimeInSec;
 
     return gains;
 }
@@ -225,13 +214,13 @@ float* PIDController::getGains()
 void PIDController::setDifferentialFilter(bool isActive, float alpha)
 {
     this->filterDerivative = isActive;
-    this->expon_filter_alpha = alpha;
+    this->d_filter_alpha = alpha;
 }
 
-void PIDController::setOutputFilter(bool isActive, float alpha)
+void PIDController::setInputFilter(bool isActive, float alpha)
 {
     this->outputFilter = isActive;
-    this->output_exp_filter_alpha = alpha;
+    this->input_exp_filter_alpha = alpha;
 }
 
 void PIDController::setErrorDeadBand(float const deadband) {

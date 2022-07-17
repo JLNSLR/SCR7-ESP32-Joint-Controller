@@ -47,7 +47,7 @@ public:
 
     float position_sensor_val;
 
-    float accel_change = 5.0;
+    float accel_change = 5.0*DEG2RAD;
 
 private:
 

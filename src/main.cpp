@@ -11,14 +11,13 @@
 
 #include <CAN.h>
 #include <cli_core.h>
+#include <motion_interface.h>
 
 
 
 // --- Global Variables --- //
 
 CRGB leds[1];
-
-
 
 
 void setup()
@@ -33,37 +32,23 @@ void setup()
   xSemaphoreGive(glob_SPI_mutex);
   xSemaphoreGive(glob_Serial_mutex);
 
-
-
   // Setup LEDs 
   FastLED.addLeds<NEOPIXEL, RGB_LED_PIN>(leds, 1);
   leds[0] = CRGB::GreenYellow;
   FastLED.setBrightness(255);
   FastLED.show();
 
-
   // Initialize Command-Line-Interface (CLI)
   cli_init();
 
-
   // Initialize Drive System 
   drvSys_initialize();
-
   Serial.println("JCTRL_INFO: Setting up Drive System succesful. Starting FOC-Controller.");
-  drvSys_start_foc_processing();
 
-
-  //drvSys_start_motion_control(cascade_position_control);
-
-  //jCtrl_CLI_debug_output_start(true, false, false, false, false, false);
-
-
-  //drvSys_start_debug_output();
   // Calibration of FOC
   //drvSys_calibrate_FOC();
 
-  //drvSys_calibrate_FOC_phase();
-
+  drvSys_start_motion_control(dual_control);
 
   /** Setup ASCI Interface */
 
@@ -83,7 +68,7 @@ void setup()
   xSemaphoreGive(glob_Serial_mutex);
 
   leds[0] = CRGB::GreenYellow;
-  FastLED.setBrightness(255);
+  FastLED.setBrightness(100);
   FastLED.show();
 
 
@@ -101,39 +86,14 @@ void loop()
   FastLED.show();
   vTaskDelay(500);
   //vTaskDelay(10);
-
-  /*
-   Serial.print(motor_encoder.getRotationDeg() / 90.0);
-   Serial.print("\t");
-   Serial.println(joint_encoder.getRotationDeg());
-   */
-
-   //Serial.println(motor_encoder.getRotationDeg() / joint_encoder.getRotationDeg());
+*/
 
 
   cli_read_line_cmd();
   cli_parse_line_cmd();
   cli_execute_line_cmd();
 
-  /*
-  drvSys_extendedDriveState drvSys_state_data = drvSys_get_extended_drive_state();
 
-  xSemaphoreTake(glob_Serial_mutex, portMAX_DELAY);
-  Serial.print(drvSys_state_data.joint_pos);
-  Serial.print("\t");
-  Serial.print(drvSys_state_data.joint_vel);
-  Serial.print("\t");
-  Serial.print(drvSys_state_data.joint_acc);
-  Serial.print("\t");
-  Serial.print(drvSys_state_data.motor_pos);
-  Serial.print("\t");
-  Serial.print(drvSys_state_data.motor_vel);
-  Serial.print("\t");
-  Serial.println(drvSys_state_data.motor_acc);
-
-
-  xSemaphoreGive(glob_Serial_mutex);
-  */
   vTaskDelay(10);
   TIMERG0.wdt_wprotect = TIMG_WDT_WKEY_VALUE;
   TIMERG0.wdt_feed = 1;

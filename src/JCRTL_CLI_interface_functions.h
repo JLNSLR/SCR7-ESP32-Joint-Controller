@@ -5,13 +5,11 @@
 extern bool jcrtl_cli_feedback;
 
 extern bool cli_output_active;
-enum cli_output_mode { all, load_side, extended, tune_pos, tune_vel };
+enum cli_output_mode { all, load_side, extended, tune_pos, nn_pid, nn_inv };
 
 #define N_MAX_ARGS 64
 
 bool jctrl_cli_process_torque_command(char(*cli_arg)[N_MAX_ARGS]);
-
-bool jctrl_cli_process_velocity_command(char(*cli_arg)[N_MAX_ARGS]);
 
 bool jctrl_cli_process_position_command(char(*cli_arg)[N_MAX_ARGS]);
 
@@ -22,6 +20,14 @@ bool jctrl_cli_process_drive_sys_command(char(*cli_arg)[N_MAX_ARGS]);
 bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]);
 
 bool jctrl_cli_process_adapt_kalman(char(*cli_arg)[N_MAX_ARGS]);
+
+bool jctrl_cli_process_nn_commands(char(*cli_arg)[N_MAX_ARGS]);
+
+//bool jctrl_cli_process_motion_planner_commands(char(*cli_arg)[N_MAX_ARGS]);
+
+bool jctrl_cli_limit_command(char(*cli_arg)[N_MAX_ARGS]);
+
+bool jctrl_cli_save_command(char(*cli_arg)[N_MAX_ARGS]);
 
 void _jctrl_cli_feedback_output(String output);
 

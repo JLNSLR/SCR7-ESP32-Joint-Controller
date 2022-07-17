@@ -13,13 +13,12 @@
 #include <PID/PIDController.h>
 #include <drive_system_settings.h>
 #include <kinematic_kalman_filter.h>
-
-//#include <drive_dynamic_kalman_filter.h>
+#include <inverse_dynamics_learner.h>
+#include <drive_system_types.h>
+#include <pid_tuner_nn.h>
 
 #include <Preferences.h>
 
-#define DEG2RAD 0.01745329251994329576923690768489
-#define RAD2DEG 57.295779513082320876798154814105
 
 /* ##########################################################################
 ############## ---- Constant Drive System Parameters ----####################
@@ -27,19 +26,24 @@
 
 
 /* --- Timing Constants --- */
-
 #define DRVSYS_FOC_PERIOD_US 200 //us -> 5kHz
+//Encoder Processing
 #define DRVSYS_PROCESS_ENCODERS_PERIOD_US 250 //us -> 3kHz
 #define DRVSYS_PROCESS_ENCODERS_FREQU 4000 //Hz
+// Torque Target Control 
 #define DRVSYS_CONTROL_TORQUE_PERIOD_US 333 // us 
 #define DRVSYS_CONTROL_TORQUE_FREQU 3000 // Hz
-#define DRVSYS_CONTROL_VEL_PERIOD_US 333 //us //600Hz
-#define DRVSYS_CONTROL_VEL_FREQ 3000    //Hz
-#define DRVSYS_CONTROL_POS_PERIOD_US 3333 //ms //1000Hz
-#define DRVSYS_CONTROL_POS_FREQ 3000
-
-#define DRVSYS_CONTROL_ADMITTANCE_PERIOD_MS 10
+// PID Controller
+#define DRVSYS_CONTROL_POS_PERIOD_US 500 //us 2000Hz
+#define DRVSYS_CONTROL_POS_FREQ 2000 //Hz
+// Torque Sensor Processing
 #define DRVSYS_PROCESS_TORQUE_SENSOR_PERIOD_MS 333
+
+//Admittance Controller
+#define DRVSYS_CONTROL_ADMITTANCE_PERIOD_MS 5
+
+//Learning System Dynamics
+#define DRVSYS_LEARNING_PERIOD_MS 2
 
 /* --- Hardware-Timer-Constants --- */
 #define DRVSYS_TIMER_PRESCALER_DIV 80 // with 80MHz Clock, makes the timer tick every 1us
@@ -47,9 +51,7 @@
 
 /* Allow Calibrations */
 
-
 #define ALLOW_ENCODER_CALIBRATION_ROUTINE
-
 
 #define ALLOW_AXIS_ALIGN_CALIBRATION
 
@@ -68,103 +70,6 @@
 
 /* DEBUG COMMAND */
 #define DRV_SYS_DEBUG
-
-/*########################################################################
-################ Drive System Data Types & Enums #########################
-#########################################################################*/
-
-/* Drive System State Flag */
-enum drvSys_StateFlag { error, not_ready, ready, foc_direct_torque, closed_loop_control_active, closed_loop_control_inactive };
-/*Drive System Control Mode Variables */
-enum drvSys_controlMode { direct_torque, dual_control, admittance_control, impedance_control, hybrid_control };
-
-extern drvSys_controlMode drvSys_mode;
-extern drvSys_StateFlag drvSys_state_flag;
-
-struct drvSys_PID_Gains {
-    float K_p;
-    float K_i;
-    float K_d;
-
-};
-
-struct drvSys_admittance_parameters {
-    float virtual_spring;
-    float virtual_damping;
-    float virtual_inertia;
-};
-
-
-/*#########################################################################
-################# Drive System Data Structures ############################
-##########################################################################*/
-
-struct drvSys_driveState {
-    float joint_pos;
-    float joint_vel;
-    float joint_acc;
-    float joint_torque;
-    float motor_torque;
-};
-
-struct drvSys_extendedDriveState {
-    float joint_pos;
-    float joint_vel;
-    float joint_acc;
-    float joint_torque;
-    float motor_torque;
-    float motor_pos;
-    float motor_vel;
-    float motor_acc;
-};
-
-struct drvSys_driveTargets {
-    float pos_target;
-    float vel_target;
-    float motor_torque_target;
-    float ref_torque;
-};
-
-
-struct drvSys_parameters {
-    int max_current_mA;
-    float max_torque_Nm;
-    float max_vel;
-    drvSys_PID_Gains vel_pid_gains;
-    drvSys_PID_Gains pos_pid_gains;
-    float joint_pos_P_gain;
-    float vel_ff_gain;
-    drvSys_admittance_parameters admittance_gains;
-    float limit_high_deg;
-    float limit_low_deg;
-};
-
-struct drvSys_notch_filter_params {
-    bool notch_0_active;
-    bool notch_1_active;
-    float notch_frequ_0;
-    float notch_bw_0;
-    float notch_frequ_1;
-    float notch_bw_1;
-};
-
-extern drvSys_parameters drvSys_parameter_config;
-
-struct drvSys_Constants {
-    const int nominal_current_mA;
-    const float transmission_ratio;
-    const int joint_id;
-    const float motor_torque_constant;
-};
-
-struct drvSys_controllerState {
-    enum drvSys_controlMode control_mode;
-    enum drvSys_StateFlag state_flag;
-    bool calibrated;
-    bool overtemperature;
-    bool temperature_warning;
-    int temperature;
-};
 
 
 /* ##########################################################################
@@ -186,61 +91,47 @@ int32_t drvSys_start_foc_processing();
  *
  */
 int32_t drvSys_start_motion_control(drvSys_controlMode = dual_control);
-/**
- * @brief obtain the current state of the drive system
- *
- * @return +1 if started, -1 not able to start
- */
- //drvSys_State_t drvSys_get_current_state();
-
-void drvSys_start_debug_output();
 
 void drvSys_stop_controllers();
-
-void drvSys_set_notch_filters(int filter_id, float notch_frequ, float bandwidth_f = 10, bool activate = false);
-
-void drvSys_remove_notch_filter(int filter_id = 0);
 
 
 /* Interface Functions */
 
+const drvSys_parameters drvSys_get_parameters();
+const drvSys_controllerCondition drvSys_get_controllerState();
+const drvSys_driveState drvSys_get_drive_state();
+const drvSys_FullDriveState drvSys_get_full_drive_state();
+const drvSys_Constants drvSys_get_constants();
+const drvSys_driveTargets drvSys_get_targets();
+
 /**
- * @brief
- *
- * @return drvSys_parameters
+ * @brief sets the target values for the joint controller including
+ * position (rad), velocity (rad/s), acceleration (rad/s^2), motor torque (Nm), joint torque (Nm)
+ * motor torque acts as feed forward term
+ * @param targets
  */
-drvSys_parameters drvSys_get_parameters();
-/**
- * @brief
- *
- * @return drvSys_controllerState
- */
-drvSys_controllerState drvSys_get_controllerState();
+void drvSys_set_target(drvSys_driveTargets targets);
 
 
 /**
- * @brief sets torque target to the FOC controller - directly
- *
- * @param target_torque
- */
-void drvSys_set_target_motor_torque(float target_torque);
-/**
- * @brief sets torque target to the torque controller - checks for torque limits
+ * @brief sets motor torque target to the torque controller - checks for torque limits
  *
  * @param torque
  */
-void drvSys_set_target_torque(float torque);
+void _drvSys_set_target_torque(float torque_Nm);
 
-void drvSys_set_target_velocity(float vel);
+/**
+ * @brief sets velocity target
+ *
+ * @param vel_rad
+ */
+void _drvSys_set_target_velocity(float vel_rad);
 
-void drvSys_set_target_pos(float angle);
+void _drvSys_set_target_pos(float angle_rad);
 
-void drvSys_set_kalman_filter_acc_noise(float acc_noise, bool joint);
-drvSys_driveTargets drvSys_get_targets();
 
+// Used for direct torque control
 void drvSys_set_feed_forward_torque(float torque_ff);
-
-void drvSys_set_feed_forward_velocity(float vel_ff);
 
 /**
  * @brief checks wether the input is valid w.r.t. the joint limit
@@ -250,6 +141,14 @@ void drvSys_set_feed_forward_velocity(float vel_ff);
  * @return float - input, or 0.0 if joint limit is reached
  */
 float _drvSys_check_joint_limit(float input);
+
+
+/* Adapt Filter Functions */
+void drvSys_set_notch_filters(int filter_id, float notch_frequ, float bandwidth_f = 10, bool activate = false);
+
+void drvSys_remove_notch_filter(int filter_id = 0);
+
+void drvSys_set_kalman_filter_acc_noise(float acc_noise, bool joint);
 
 /* Functions to change persistent parameters (PID Gains etc.) */
 
@@ -264,7 +163,9 @@ void drvSys_save_alignment_to_Flash();
 bool drvSys_read_alignment_from_Flash();
 void drvSys_reset_alignment_data_on_Flash();
 //Controller Gains
+void drvSys_update_PID_gains(drvSys_PID_Gains gains);
 void drvSys_set_pos_PID_gains(float Kp, float Ki, float Kd, bool save = true);
+void drvSys_set_ff_gains(float gain, bool vel);
 void drvSys_save_pos_PID_gains();
 
 /**
@@ -276,18 +177,16 @@ void drvSys_save_pos_PID_gains();
  */
 void drvSys_set_advanced_PID_settings(int type = 0, float filter_alpha = 0.0, float deadzone = 0.0, bool active = true);
 
-void drvSys_set_vel_PID_gains(float Kp, float Ki, float Kd, bool save = true);
-void drvSys_save_vel_PID_gains();
 
 void drvSys_set_admittance_params(float virtual_spring, float virtual_damping, float virtual_inertia, bool save = true);
 void drvSys_save_admittance_params();
 
 
 bool _drvSys_read_pos_PID_gains_from_flash();
-bool _drvSys_read_vel_PID_gains_from_flash();
 bool _drvSys_read_admittanceGains_from_flash();
 
-void drvSys_save_angle_offset(float angle_offset);
+
+void _drvSys_save_angle_offset(float angle_offset);
 
 /* ###################################################
 ############ Internal Drive System functions #########
@@ -309,17 +208,26 @@ void _drvSys_calibrate_with_hallsensor();
 void _drvSys_align_axis();
 
 
-drvSys_driveState drvSys_get_drive_state();
+/* Inverse Dynamics Learner */
 
-drvSys_extendedDriveState drvSys_get_extended_drive_state();
+void _drvSys_inverse_dynamics_nn_setup();
+void _drvSys_learn_dynamics_task(void* parameters);
+void drvSys_inv_dyn_nn_set_max_learning_iterations_per_step(unsigned int n_iterations);
+void drvSys_inv_dyn_nn_activate_control(bool active);
+void drvSys_inv_dyn_nn_set_learning_rate(float lr, float lr_error_scale);
+float drvSys_inv_dyn_nn_pred_error_filtered();
+float _drvSys_inv_dyn_nn_predict_torque();
+float drvSys_inv_dyn_read_predicted_torque();
 
-drvSys_controllerState drvSys_get_controllerState();
+// Neural Network PID Tuner 
 
-drvSys_parameters drvSys_get_parameters();
+void _drvSys_nn_pid_tuner_setup();
+void _drvSys_nn_pid_tuner_learn_pid_tuning_task(void* parameters);
 
-drvSys_Constants drvSys_get_constants();
+void drvSys_nn_pid_tuner_set_learning_rate(float lr, float lr_error_scale);
+void drvSys_nn_pid_tuner_activate(bool activate);
 
-drvSys_driveTargets drvSys_get_targets();
+
 
 /* Interrupt Handler */
 
@@ -344,34 +252,13 @@ void _drvSys_process_encoders_task(void* parameters);
 /* --- RTOS Controller Tasks --- */
 void _drvSys_PID_dual_controller_task(void* parameters);
 
-void _drvSys_velocity_controller_task(void* parameters);
-
 void _drvSys_torque_controller_task(void* parameters);
 
 void _drvSys_admittance_controller_task(void* parameters);
 
 
-/* Debug & Test Tasks */
-void _drvSys_debug_print_position_task(void* parameters);
-
-void _drvSys_read_serial_commands_task(void* parameters);
-
-void _drvSys_test_signal_task(void* parameters);
-
 void _drvSys_process_peripheral_sensors_task(void* parameters);
 
-/**
- * @brief Starts a test signal task for debugging and controller tuning
- *
- * @param signal_target 0 - pos, 1 - vel, 2 - m_torque, 3 - output_torque
- * @param shape 0 - square, 1 - sine wave, 2 - ramp function
- * @param max maximum value (deg, deg/s, Nm)
- * @param min minimum value (deg, deg/s, Nm)
- * @param period (ms)
- */
-void drvSys_start_test_signal(int signal_target, int shape, float max, float min, float period);
-
-void drvSys_stop_test_signal();
 
 /* internal Funvtions */
 
