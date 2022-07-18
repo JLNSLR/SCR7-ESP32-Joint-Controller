@@ -44,6 +44,7 @@ void setup()
   // Initialize Drive System 
   drvSys_initialize();
   Serial.println("JCTRL_INFO: Setting up Drive System succesful. Starting FOC-Controller.");
+  drvSys_start_foc_processing();
 
   // Calibration of FOC
   //drvSys_calibrate_FOC();
@@ -70,6 +71,12 @@ void setup()
   leds[0] = CRGB::GreenYellow;
   FastLED.setBrightness(100);
   FastLED.show();
+
+
+  // Start Motion Control Interface
+  Serial.println("JCTRL_INFO: Starting Motion Control Interface.");
+
+  start_motion_interface();
 
 
 }

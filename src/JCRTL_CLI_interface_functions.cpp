@@ -1,5 +1,6 @@
 #include <JCRTL_CLI_interface_functions.h>
 #include <drive_system.h>
+#include <motion_interface.h>
 
 float inv_transmission;
 
@@ -106,6 +107,28 @@ bool jctrl_cli_process_position_command(char(*cli_arg)[N_MAX_ARGS]) {
 
 }
 
+bool jctrl_cli_process_motion_planner_commands(char(*cli_arg)[N_MAX_ARGS]) {
+
+    char* keyword = cli_arg[0];
+    char* value_0 = cli_arg[1];
+    char* value_1 = cli_arg[2];
+    char* value_2 = cli_arg[3];
+    bool processed = false;
+
+    if (strcmp(keyword, "mov") == 0) {
+        processed = true;
+        float position_target = atof(value_0) * DEG2RAD;
+        float travel_vel = atof(value_1) * DEG2RAD;
+        float travel_acc = atof(value_2) * DEG2RAD;
+
+        handle_motion_command(position_target, travel_vel, travel_acc);
+
+
+    }
+    return processed;
+
+}
+
 bool jctrl_cli_process_pid_command(char(*cli_arg)[N_MAX_ARGS]) {
 
     char* keyword = cli_arg[0];
@@ -115,11 +138,11 @@ bool jctrl_cli_process_pid_command(char(*cli_arg)[N_MAX_ARGS]) {
 
     if (strcmp(keyword, "pid") == 0 || strcmp(keyword, "PID") == 0) {
         processed = true;
-        if (strcmp(keyword_2, "gains") == 0 || strcmp(keyword_3, "g") == 0) {
+        if (strcmp(keyword_2, "gains") == 0 || strcmp(keyword_2, "g") == 0) {
 
-            float p_val = atof(cli_arg[3]);
-            float i_val = atof(cli_arg[4]);
-            float d_val = atof(cli_arg[5]);
+            float p_val = atof(cli_arg[2]);
+            float i_val = atof(cli_arg[3]);
+            float d_val = atof(cli_arg[4]);
 
             bool save = false;
 
@@ -295,6 +318,9 @@ bool jctrl_cli_process_nn_commands(char(*cli_arg)[N_MAX_ARGS]) {
             if (strcmp(command, "stop") == 0) {
                 drvSys_inv_dyn_nn_activate_control(false);
             }
+            if (strcmp(command, "s") == 0) {
+
+            }
 
 
         }
@@ -308,12 +334,107 @@ bool jctrl_cli_process_nn_commands(char(*cli_arg)[N_MAX_ARGS]) {
             if (strcmp(command, "stop") == 0) {
                 drvSys_nn_pid_tuner_activate(false);
             }
+            if (strcmp(command, "s") == 0) {
+
+            }
         }
 
 
 
     }
     return processed;
+}
+
+
+bool jctrl_cli_process_trajectory_command(char(*cli_arg)[N_MAX_ARGS]) {
+    char* keyword = cli_arg[0];
+    char* value_0 = cli_arg[1];
+    char* value_1 = cli_arg[2];
+    char* value_2 = cli_arg[3];
+    char* value_3 = cli_arg[4];
+    char* value_4 = cli_arg[5];
+
+
+    bool processed = false;
+
+    if (strcmp(keyword, "tr") == 0) {
+        processed = true;
+        float position_target = atof(value_0);
+        float vel_target = atof(value_1);
+        float acc_target = atof(value_2);
+        float torque_ff = atof(value_3);
+        float torque_ref = atof(value_4);
+
+        drvSys_driveTargets target;
+        target.acc_target = acc_target;
+        target.vel_target = vel_target;
+        target.pos_target = position_target;
+        target.motor_torque_ff = torque_ff;
+        target.ref_torque = torque_ref;
+        handle_motion_command(target);
+
+    }
+    return processed;
+}
+bool jctrl_cli_manage_calibration_command(char(*cli_arg)[N_MAX_ARGS]) {
+    char* keyword = cli_arg[0];
+    char* keyword_0 = cli_arg[1];
+    char* value_1 = cli_arg[2];
+    ;
+
+
+    bool processed = false;
+
+    if (strcmp(keyword, "cal") == 0) {
+        processed = true;
+
+        if (strcmp(keyword, "del") == 0) {
+            drvSys_reset_encoder_offset_data_on_Flash();
+            _jctrl_cli_feedback_output("Deleted Calibration Data on Flash");
+
+        }
+
+    }
+    return processed;
+}
+bool jctrl_cli_process_motion_plan_constraints_commands(char(*cli_arg)[N_MAX_ARGS]) {
+
+}
+bool jctrl_cli_limit_command(char(*cli_arg)[N_MAX_ARGS]) {
+    char* keyword = cli_arg[0];
+    char* type = cli_arg[1];
+    char* value_1 = cli_arg[2];
+    char* value_2 = cli_arg[3];
+    char* value_3 = cli_arg[4];
+    char* value_4 = cli_arg[5];
+
+
+    bool processed = false;
+
+    if (strcmp(keyword, "limit") == 0) {
+        processed = true;
+        if (strcmp(keyword, "p") == 0) {
+            float limit_pos = atof(value_1);
+            float limit_neg = atof(value_2);
+        }
+        if (strcmp(keyword, "t") == 0) {
+            float max_torque = atof(value_1);
+            drvSys_limit_torque(max_torque);
+        }
+        if (strcmp(keyword, "v") == 0) {
+            float max_vel = atof(value_1);
+
+        }
+        if (strcmp(keyword, "i") == 0) {
+            float current_max = atof(value_1);
+
+        }
+
+    }
+}
+
+bool jctrl_cli_save_command(char(*cli_arg)[N_MAX_ARGS]) {
+
 }
 
 
@@ -347,7 +468,7 @@ void _jctrl_cli_output_periodic() {
             Serial.print("\t");
             Serial.print(targets.vel_target * RAD2DEG);
             Serial.print("\t");
-            Serial.println(targets.motor_torque_target);
+            Serial.println(targets.motor_torque_ff);
             return;
         }
         if (cli_out_mode == load_side) {
@@ -369,7 +490,7 @@ void _jctrl_cli_output_periodic() {
             Serial.print("\t");
             Serial.print(targets.vel_target * RAD2DEG);
             Serial.print("\t");
-            Serial.println(targets.motor_torque_target);
+            Serial.println(targets.motor_torque_ff);
 
 
         }
@@ -398,7 +519,7 @@ void _jctrl_cli_output_periodic() {
             Serial.print("\t");
             Serial.print(targets.vel_target * RAD2DEG);
             Serial.print("\t");
-            Serial.print(targets.motor_torque_target);
+            Serial.print(targets.motor_torque_ff);
             Serial.print("\t");
             Serial.print(0); // Motor Temperature
             Serial.print("\t");
@@ -413,8 +534,6 @@ void _jctrl_cli_output_periodic() {
         drvSys_FullDriveState state = drvSys_get_full_drive_state();
 
         Serial.print(state.joint_pos * RAD2DEG);
-        Serial.print("\t");
-        Serial.print(state.motor_pos * inv_transmission * RAD2DEG);
         Serial.print("\t");
         Serial.println(targets.pos_target * RAD2DEG);
 
@@ -458,6 +577,7 @@ void _jctrl_cli_output_periodic() {
 
     }
 }
+
 
 
 

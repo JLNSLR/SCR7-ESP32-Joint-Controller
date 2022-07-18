@@ -97,7 +97,7 @@ void drvSys_stop_controllers();
 
 /* Interface Functions */
 
-const drvSys_parameters drvSys_get_parameters();
+drvSys_parameters& drvSys_get_parameters();
 const drvSys_controllerCondition drvSys_get_controllerState();
 const drvSys_driveState drvSys_get_drive_state();
 const drvSys_FullDriveState drvSys_get_full_drive_state();
@@ -167,6 +167,8 @@ void drvSys_update_PID_gains(drvSys_PID_Gains gains);
 void drvSys_set_pos_PID_gains(float Kp, float Ki, float Kd, bool save = true);
 void drvSys_set_ff_gains(float gain, bool vel);
 void drvSys_save_pos_PID_gains();
+
+void drvSys_limit_torque(float torque_limit);
 
 /**
  * @brief
@@ -257,7 +259,7 @@ void _drvSys_torque_controller_task(void* parameters);
 void _drvSys_admittance_controller_task(void* parameters);
 
 
-void _drvSys_process_peripheral_sensors_task(void* parameters);
+void _drvSys_monitor_system_task(void* parameters);
 
 
 /* internal Funvtions */

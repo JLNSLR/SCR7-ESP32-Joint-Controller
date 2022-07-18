@@ -23,11 +23,15 @@ bool jctrl_cli_process_adapt_kalman(char(*cli_arg)[N_MAX_ARGS]);
 
 bool jctrl_cli_process_nn_commands(char(*cli_arg)[N_MAX_ARGS]);
 
-//bool jctrl_cli_process_motion_planner_commands(char(*cli_arg)[N_MAX_ARGS]);
+bool jctrl_cli_process_motion_planner_commands(char(*cli_arg)[N_MAX_ARGS]);
+
+bool jctrl_cli_process_motion_plan_constraints_commands(char(*cli_arg)[N_MAX_ARGS]);
+
+bool jctrl_cli_process_trajectory_command(char(*cli_arg)[N_MAX_ARGS]);
+
+bool jctrl_cli_manage_calibration_command(char(*cli_arg)[N_MAX_ARGS]);
 
 bool jctrl_cli_limit_command(char(*cli_arg)[N_MAX_ARGS]);
-
-bool jctrl_cli_save_command(char(*cli_arg)[N_MAX_ARGS]);
 
 void _jctrl_cli_feedback_output(String output);
 

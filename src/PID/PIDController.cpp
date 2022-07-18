@@ -22,6 +22,13 @@ PIDController::PIDController(float kp, float ki, float kd) : PIDController()
     this->kp = kp;
     this->ki = ki;
     this->kd = kd;
+
+    error = 0;
+    prev_error = 0;
+    prev_error_t2 = 0;
+    dError = 0;
+    iTerm = 0;
+    lastInput = 0;
 };
 
 void PIDController::compute()
@@ -33,7 +40,9 @@ void PIDController::compute()
     }
 
     /* Compute error variables */
+
     error = setpoint - input;
+
 
     /* Compute Output Filter */
     if (outputFilter)
@@ -41,7 +50,6 @@ void PIDController::compute()
         error = error * input_exp_filter_alpha + prev_error * (1 - input_exp_filter_alpha);
 
     }
-
 
     iTerm += error;
 
@@ -59,8 +67,6 @@ void PIDController::compute()
     }
 
     static float prev_dInput = 0;
-
-    float dError;
 
     if (derivative_on_measurement) {
         dError = (-1.0) * (input - lastInput);

@@ -2,11 +2,12 @@
 #define DRV_CAN_UTILS
 
 #include <drive_system.h>
+#include <motion_interface.h>
 
-#define MAX_VEL_DATA_DEG_PER_S 400 // (°/s)
+#define MAX_VEL_DATA_DEG_PER_S 180 // (°/s)
 #define MAX_POS_DATA_DEG 180 // °
-#define MAX_ACC_DATA_DEG 2000
-#define MAX_TORQUE_DATA_NM 150
+#define MAX_ACC_DATA_DEG 1250
+#define MAX_TORQUE_DATA_NM 125
 
 #define MAX_POS_FACTOR  0.00549316
 #define MAX_POS_FACTOR_PACK  182.044444
@@ -17,10 +18,6 @@
 
 #define MAX_JTORQUE_FACTOR 0.0001430511
 #define MAX_JTORQUE_FACTOR_PACK  6990.50667
-
-#define MAX_PID_GAIN_VAL 1000000
-#define PID_GAIN_VAL_FACTOR 0.000023283064365386962890625
-#define PID_GAIN_VAL_FACTOR_PACK 42949.67296
 
 #define MAX_MOTOR_TORQUE_VAL 100.0
 #define MOTOR_TORQUE_FACTOR 0.000095367431640625
@@ -43,9 +40,9 @@ bits 7-10: message type: values: 0x0 -> 0xF
 
 /* message type id: 4 bit value 0x0 -> 0xF */
 enum drv_can_msg_type_id {
-    drive_motion_state = 0x0, drive_torque = 0x1, drive_state = 0x2,
-    drive_motion_command = 0x3, drive_sys_controller_command = 0x4, drive_sys_param_command = 0x5,
-    drive_sys_light_command = 0x6, drive_sys_pid_command = 0x7
+    drive_state = 0x0, drive_traj_target = 0x1, go_to_target = 0x2, controller_state = 0x3, mode_command = 0x4,
+    drive_param_command = 0x5, drive_sys_light_command = 0x6, drive_direct_torque_command = 0x7
+
 };
 
 enum drv_can_motionCmdType { traj_command, direct_command, goto_command };
@@ -78,11 +75,12 @@ struct drvComm_paramsCmd {
 };
 
 
-struct drvComm_MotionState {
-    int pos : 16;
-    int vel : 16;
-    int acc : 16;
+struct drvComm_DriveState {
+    int pos : 14;
+    int vel : 13;
+    int acc : 13;
     int m_torque : 9;
+    int joint_torque : 15;
 };
 
 struct drvComm_TorqueState {
@@ -91,13 +89,13 @@ struct drvComm_TorqueState {
 
 struct drvComm_ControllerState {
     int stateFlag : 3;
-    int active : 1;
     int error : 1;
     int mode : 3;
     int calibrated : 1;
+    int hit_endstop : 2;
     int temperature : 12;
     int overtemperature : 1;
-    int max_motor_torque : 20;
+    int max_motor_torque : 12;
 };
 
 struct drvComm_LightCmd {
@@ -107,12 +105,7 @@ struct drvComm_LightCmd {
     int bv : 8;
 };
 
-struct drvComm_PID_update {
-    int PID_K : 3;
-    int PID_t : 3;
-    int gain : 32;
-    bool save : 1;
-};
+
 
 
 /* Motion command Types:
@@ -123,49 +116,23 @@ struct drvComm_PID_update {
 */
 
 struct drvComm_MotionCmd_traj_target {
-    int pos : 16;
-    int vel_ff : 16;
+    int pos : 14;
+    int vel : 13;
+    int acc : 13;
     int torque_ff : 9;
+    int ref_torque : 15;
 };
 
 struct drvComm_MotionCmd_goTo_target {
-    int pos : 16;
-    int vel_max : 16;
+    int pos : 14;
+    int vel_max : 13;
+    int acc_max : 13;
 };
 
 struct drvComm_MotionCmd_direct_motor_torque_target {
     int m_torque_target : 9;
 };
 
-
-
-struct drvComm_MotionCmd {
-    drv_can_motionCmdType type : 3;
-
-    uint8_t drvComm_MotionData;
-    union {
-        drvComm_MotionCmd_traj_target traj_target;
-        drvComm_MotionCmd_goTo_target goTo_target;
-        drvComm_MotionCmd_direct_motor_torque_target direct_target;
-    };
-
-};
-
-
-struct drvComm_CAN_motionMsg {
-
-    union {
-        uint8_t bytes[8];
-        drvComm_MotionState motionMsg;
-    };
-};
-
-struct drvComm_CAN_torqueMsg {
-    union {
-        uint8_t bytes[3];
-        drvComm_TorqueState torque;
-    };
-};
 
 
 struct drvComm_motion_data {
@@ -175,17 +142,17 @@ struct drvComm_motion_data {
     float motor_torque;
 };
 
+/*
 drvComm_MotionCmd drvComm_gen_motion_command(drv_can_motionCmdType type, float pos = 0, float vel = 0, float torque = 0);
 
 drvComm_controllerCmd drvComm_gen_controller_command(bool start = true, bool stop = false, drvSys_controlMode control_mode = dual_control);
-
-drvComm_PID_update drvComm_gen_pid_update(int controller_type, int gain_type, float gain_value);
 
 drvComm_paramsCmd drvComm_gen_params_command(drvComm_parameterType type, float param_value);
 
 drvComm_motion_data drvComm_unpack_motion_data(drvComm_MotionState motion_state);
 
 float drvComm_unpack_torque_sensor_data(drvComm_TorqueState torque_state);
+*/
 
 
 #endif // ! DRV_CAN_UTILS

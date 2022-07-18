@@ -16,6 +16,8 @@ struct extendedPositionCommand {
 CircularBuffer<extendedPositionCommand, 4> position_command_buffer;
 CircularBuffer<drvSys_driveTargets, 10> trajectory_command_buffer;
 
+bool no_commands_given = true;
+
 
 void start_motion_interface() {
 
@@ -48,6 +50,7 @@ void handle_motion_command(float target_pos) {
 
         position_command_buffer.push(command);
     }
+    no_commands_given = false;
 }
 
 void handle_motion_command(float target_pos, float travel_vel, float travel_acc) {
@@ -65,12 +68,14 @@ void handle_motion_command(float target_pos, float travel_vel, float travel_acc)
 
         position_command_buffer.push(command);
     }
+    no_commands_given = false;
 }
 
 void handle_motion_command(drvSys_driveTargets target_traj_point) {
 
-    motion_mode = trajetory;
+    motion_mode = trajectory;
     drvSys_set_target(target_traj_point);
+    no_commands_given = false;
 }
 
 void _motion_sequencer_task(void* parameters) {
@@ -79,9 +84,11 @@ void _motion_sequencer_task(void* parameters) {
 
     static long last_time_us = 0;
 
+
+
     while (true) {
 
-        if (motion_mode == position) {
+        if (motion_mode == position && no_commands_given == false) {
 
             if (!position_command_buffer.isEmpty() && !motion_planner.executing_traj_flag) {
                 extendedPositionCommand command = position_command_buffer.pop();
@@ -100,16 +107,27 @@ void _motion_sequencer_task(void* parameters) {
             target.acc_target = target_point.acceleration;
             target.vel_target = target_point.velocity;
             target.pos_target = target_point.position;
-            target.motor_torque_target = 0;
+            target.motor_torque_ff = 0;
             target.ref_torque = 0;
 
             drvSys_set_target(target);
         }
+        vTaskDelay(motion_delay);
 
 
 
     }
 
 
-    vTaskDelay(motion_delay);
+
+}
+
+void set_motion_planner_constraints(float max_vel, float max_acc, float max_jerk) {
+
+    motion_planner.constraints.max_accel = max_acc;
+    motion_planner.constraints.max_deccel = max_acc;
+    motion_planner.constraints.max_vel = max_vel;
+    motion_planner.constraints.max_jerk = max_jerk;
+    motion_planner.constraints.max_jerk_deccel = max_jerk;
+
 }

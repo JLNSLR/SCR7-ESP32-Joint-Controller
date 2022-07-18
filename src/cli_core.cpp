@@ -109,7 +109,7 @@ void cli_execute_line_cmd() {
         processed_cmd = jctrl_cli_process_adapt_kalman(cli_args);
     }
     if (!processed_cmd) {
-        //processed_cmd = jctrl_cli_process_motion_planner_commands(cli_args);
+        processed_cmd = jctrl_cli_process_motion_planner_commands(cli_args);
     }
 
 

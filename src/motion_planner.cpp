@@ -3,6 +3,11 @@
 #include <cstdlib>
 #include <stdint.h>
 #include <Arduino.h>
+#include <drive_system_settings.h>
+
+//#define MOTION_PLAN_DEBUG
+
+
 
 MotionPlanner::MotionPlanner(float max_vel, float max_accel, float max_deccel, float max_jerk, float max_jerk_deccel) {
     constraints.max_vel = max_vel;
@@ -54,7 +59,7 @@ bool MotionPlanner::planMotion(float start, float target, motion_constraints con
         return false;
     }
 
-    if (abs(start - target) < 0.05) {
+    if (abs(start - target) < 0.05 * DEG2RAD) {
         return false;
     }
     feasible_next = constraints_new;
@@ -72,10 +77,17 @@ bool MotionPlanner::planMotion(float start, float target, motion_constraints con
 
     // Calculate Timing of ST-Curve
 
-
+    float delta_pos;
     if (start > target) {
         dir = -1.0;
+        delta_pos = start - target;
     }
+    else {
+        delta_pos = target - start;
+    }
+
+
+    delta_pos = abs(delta_pos);
 
     float inv_jerk = 1.0 / feasible_next.max_jerk;
     float inv_acc = 1.0 / feasible_next.max_accel;
@@ -91,7 +103,7 @@ bool MotionPlanner::planMotion(float start, float target, motion_constraints con
 #endif //
 
 
-    float delta_pos = abs(target - start);
+
 
     float t_1 = 1.5 * feasible_next.max_accel * inv_jerk; //t1_ first accel phase
     float t_2 = feasible_next.max_vel * inv_acc - t_1;
@@ -234,7 +246,7 @@ trajectory_point MotionPlanner::sequenceMotion(float delta_t) {
         traj_point = phase1_acceleration_buildup(internal_time, current_curve.phase_points[0], current_curve);
         executing_traj_flag = true;
     }
-    if ((internal_time - t_epsilon >= current_curve.t_phase_end_times[0] && internal_time < current_curve.t_phase_end_times[1])) {
+    if ((internal_time - t_epsilon >= current_curve.t_phase_end_times[0] && internal_time < current_curve.t_phase_end_times[1] && current_curve.t_phases[0] > 0)) {
 
         traj_point = phase2_upper_acc_limit(internal_time - current_curve.t_phase_end_times[0], current_curve.phase_points[1], current_curve);
     }
@@ -286,7 +298,7 @@ trajectory_point MotionPlanner::phase2_upper_acc_limit(float t, trajectory_point
     float dir = curve.dir;
     point.acceleration = dir * curve.feasible.max_accel;
     point.velocity = point.acceleration * t + start.velocity;
-    point.position = point.velocity * t + point.acceleration * t * t * 0.5 + start.position;
+    point.position = start.velocity * t + point.acceleration * t * t * 0.5 + start.position;
     current_point = point;
 
     return point;
@@ -337,7 +349,7 @@ trajectory_point MotionPlanner::phase6_low_deceleration_limit(float t, trajector
 
     point.acceleration = -curve.feasible.max_deccel * dir;
     point.velocity = point.acceleration * t + start.velocity;
-    point.position = point.velocity * t + point.acceleration * t * t * 0.5 + start.position;
+    point.position = start.velocity * t + point.acceleration * t * t * 0.5 + start.position;
     current_point = point;
     return point;
 }
@@ -362,18 +374,26 @@ motion_constraints MotionPlanner::gen_feasible_constraints(float start, float en
 
     motion_constraints feasible = constraints;
 
-    float epsilon = 0.05;
+    float epsilon = 0.5;
 
 
     float dir = 1.0;
 
+    float delta_pos;
+
     if (start > end) {
         dir = -1.0;
+        delta_pos = start - end;
+
     }
+    else {
+        delta_pos = end - start;
+    }
+    delta_pos = abs(delta_pos);
 
     // Check Acceleration
 
-    float curve_vel = 1.5 * feasible.max_accel * feasible.max_accel / feasible.max_jerk;
+    float curve_vel = (1.5 * feasible.max_accel * feasible.max_accel) / feasible.max_jerk;
 
 
     if (curve_vel > feasible.max_vel) {
@@ -392,7 +412,7 @@ motion_constraints MotionPlanner::gen_feasible_constraints(float start, float en
 
     // Check Velocity
 
-    float delta_pos = abs(start - end);
+
 
     float t_curve_acc = 0.75 * abs(feasible.max_accel * dir) / feasible.max_jerk + 0.75 * feasible.max_deccel / feasible.max_jerk_deccel;
 

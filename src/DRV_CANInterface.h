@@ -5,6 +5,14 @@
 
 #include <CAN.h>
 #include <drv_can_utils.h>
+#include <drive_system.h>
+
+
+#define MAX_ACCELERATION_DATA 1250*DEG2RAD
+#define MAX_VELOCITY_DATA 180*DEG2RAD
+#define MAX_POS_DATA 180*DEG2RAD
+
+
 
 
 class CANInterface {
@@ -19,10 +27,10 @@ public:
     void send_drive_torque_data();
     void send_drive_controllersys_state();
     //Process received commands
-    void process_motion_command(drvComm_MotionCmd motion_cmd);
+    //void process_motion_command(drvComm_MotionCmd motion_cmd);
     void process_drive_sys_controller_command(drvComm_controllerCmd controller_cmd);
-    void process_drive_sys_parameter_command(drvComm_paramsCmd params_cmd);
-    void process_update_PID_command(drvComm_PID_update pid_update);
+    //void process_drive_sys_parameter_command(drvComm_paramsCmd params_cmd);
+    //void process_update_PID_command(drvComm_PID_update pid_update);
     void process_light_command(drvComm_LightCmd light_cmd);
 
     void onReceive(int packetSize);

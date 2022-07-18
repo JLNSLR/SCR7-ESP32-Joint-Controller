@@ -58,7 +58,7 @@ struct drvSys_driveTargets {
     float pos_target;
     float vel_target;
     float acc_target;
-    float motor_torque_target = 0;
+    float motor_torque_ff = 0;
     float ref_torque = 0;
 
 };
@@ -72,6 +72,7 @@ struct drvSys_parameters {
     drvSys_admittance_parameters admittance_gains;
     float limit_high_deg;
     float limit_low_deg;
+    bool endStops_enabled;
 };
 
 struct drvSys_notch_filter_params {
@@ -98,7 +99,8 @@ struct drvSys_controllerCondition {
     enum drvSys_controlMode control_mode;
     enum drvSys_StateFlag state_flag;
     bool calibrated;
-    bool endStops_enabled;
+    bool hit_neg_limit;
+    bool hit_positive_limit;
     bool overtemperature;
     bool temperature_warning;
     float temperature;

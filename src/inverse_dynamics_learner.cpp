@@ -1,8 +1,11 @@
 #include <inverse_dynamics_learner.h>
 #include <drive_system_types.h>
+
+
 InverseDynamicsLearner::InverseDynamicsLearner() {
 
 }
+
 void InverseDynamicsLearner::init() {
     Serial.println("DRVSYS_INFO: Initializing NN for Inverse Dynamics.");
     const int depth = 4;
@@ -46,8 +49,11 @@ float InverseDynamicsLearner::predict_torque(const drvSys_FullDriveState state_r
 
     static float last_prediction = 0.0;
     float torque_pred = 0.0;
+
+    Serial.println("Predicting with inv NN");
     if (control_active) {
         float input_vector[7];
+        Serial.println("trying to predict");
         input_vector[0] = state_rad.joint_pos * inv_max_angle;
         input_vector[1] = state_rad.joint_vel * inv_max_vel;
         input_vector[2] = state_rad.joint_acc * inv_acc;
@@ -55,11 +61,12 @@ float InverseDynamicsLearner::predict_torque(const drvSys_FullDriveState state_r
         input_vector[4] = state_rad.motor_vel * inv_max_vel;
         input_vector[5] = state_rad.motor_acc * inv_acc;
         input_vector[6] = state_rad.joint_torque * inv_max_joint_torque;
-
+        Serial.println("trying to predict");
         if (xSemaphoreTake(mutex_inverse_dyn_network, (TickType_t)1) == pdTRUE) {
             torque_pred = *nn->predict(input_vector) * max_motor_torque;
             xSemaphoreGive(mutex_inverse_dyn_network);
             last_prediction = torque_pred;
+            Serial.println("predicte");
         }
         else {
             torque_pred = last_prediction;
@@ -73,6 +80,7 @@ float InverseDynamicsLearner::predict_torque(const drvSys_FullDriveState state_r
 }
 void InverseDynamicsLearner::add_data(const drvSys_FullDriveState state_rad) {
 
+    Serial.println("Adding Data to INV NN");
     inv_dynamics_sample sample;
     sample.input_vector[0] = state_rad.joint_pos * inv_max_angle;
     sample.input_vector[1] = state_rad.joint_vel * inv_max_vel;
@@ -88,11 +96,13 @@ void InverseDynamicsLearner::add_data(const drvSys_FullDriveState state_rad) {
 }
 bool InverseDynamicsLearner::learning_step() {
 
+
+
     bool learned = false;
     if (samples_in_buffer > 0) {
 
         inv_dynamics_sample sample = takeSampleFromBuffer();
-
+        Serial.println("Perform learning step");
         xSemaphoreTake(mutex_inverse_dyn_network, portMAX_DELAY);
         float error = nn->train_SGD(sample.input_vector, &sample.output);
         xSemaphoreGive(mutex_inverse_dyn_network);
@@ -164,6 +174,7 @@ void InverseDynamicsLearner::set_scale(float max_motor_torque, float max_vel, fl
 }
 
 void InverseDynamicsLearner::addSampleToBuffer(inv_dynamics_sample sample) {
+    //xSemaphoreTake(mutex_inverse_dyn_network, portMAX_DELAY);
     if (samples_in_buffer < buffer_size) {
         samples_in_buffer++;
         sample_vector[samples_in_buffer] = sample;
@@ -171,6 +182,8 @@ void InverseDynamicsLearner::addSampleToBuffer(inv_dynamics_sample sample) {
     else {
         sample_vector[0] = sample;
     }
+    //xSemaphoreGive(mutex_inverse_dyn_network);
+    Serial.println(samples_in_buffer);
 }
 inv_dynamics_sample InverseDynamicsLearner::takeSampleFromBuffer() {
     inv_dynamics_sample sample = sample_vector[samples_in_buffer];
@@ -191,6 +204,9 @@ void InverseDynamicsLearner::swap(inv_dynamics_sample* a, inv_dynamics_sample* b
 }
 
 void InverseDynamicsLearner::randomize(inv_dynamics_sample arr[], int n) {
+    if (n < 1) {
+        return;
+    }
     srand(time(NULL));
     int i;
     for (i = n - 1; i > 0; i--) {

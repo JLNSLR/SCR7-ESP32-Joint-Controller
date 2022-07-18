@@ -50,11 +50,11 @@ public:
     float input, output, setpoint;
     float outMin, outMax;
 
-    float error;
-    float prev_error;
-    float prev_error_t2;
-    float dError;
-    float iTerm;
+    float error = 0;
+    float prev_error = 0;
+    float prev_error_t2 = 0;
+    float dError = 0;
+    float iTerm = 0;
 
     bool derivative_on_measurement = true;
 
@@ -62,7 +62,7 @@ public:
 
 private:
     float kp, ki, kd;
-    float lastInput;
+    float lastInput = 0;
 
     // sample time in microseconds
     int sampleTime; // microseconds

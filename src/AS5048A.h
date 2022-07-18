@@ -19,7 +19,7 @@ class AS5048A
   // byte clk;
   // word transaction(word data);
   word _position;
-  int32_t _n_rollovers = 0;
+
 
   const int32_t median_samples = 16;
 
@@ -76,6 +76,7 @@ public:
   uint16_t last_sample_raw = 0;
   int32_t last_sample = 0;
   int32_t _prev_rotation = 0;
+  int32_t _n_rollovers = 0;
 
 
   /**
