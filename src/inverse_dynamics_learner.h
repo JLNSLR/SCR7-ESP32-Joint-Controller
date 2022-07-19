@@ -42,9 +42,9 @@ public:
 
 private:
     static const int buffer_size = 50;
-    inv_dynamics_sample sample_vector[buffer_size];
-    int samples_in_buffer = 0;
-    
+
+    CircularBuffer<inv_dynamics_sample, buffer_size> buffer;
+
 
 
     float max_motor_torque = 1.92; //Nm
