@@ -48,7 +48,7 @@ void AS5048A::init()
    * • Fast mode: clock frequency from 0 to 400 kHz (slave mode)
    * • High speed: 0 to 3.4 MHz clock frequency (slave mode)
    */
-  settings = SPISettings(10000000, MSBFIRST, SPI_MODE1);
+  settings = SPISettings(5000000, MSBFIRST, SPI_MODE1);
   // initialization of the Slave Select pin if the LOW slave interacts with the master if the HIGH slave ignores the signals from the master
   pinMode(_cs, OUTPUT);
   // SPI has an internal SPI-device counter, it is possible to call "begin()" from different devices
@@ -125,19 +125,21 @@ int32_t AS5048A::getRotation(bool median) {
   static const int threshold_angle = AS5048A_ANGLE / 2;
 
   int32_t rotation = AS5048A::getRotationPos(median);
+  if (rollover_detection) {
 
-  int32_t delta_rotation = rotation - _prev_rotation;
+    int32_t delta_rotation = rotation - _prev_rotation;
 
-  if (delta_rotation < -threshold_angle) {
-    // rollover detected;
-    _n_rollovers++;
+    if (delta_rotation < -threshold_angle) {
+      // rollover detected;
+      _n_rollovers++;
+    }
+    else if (delta_rotation >= threshold_angle) {
+      //rollunder detected
+      _n_rollovers--;
+    }
   }
-  else if (delta_rotation >= threshold_angle) {
-    //rollunder detected
-    _n_rollovers--;
-  }
-
   _prev_rotation = rotation;
+
 
   rotation = rotation + _n_rollovers * AS5048A_ANGLE;
 
@@ -153,7 +155,7 @@ void AS5048A::setOffsetAngle(int32_t raw_positive_offset_angle) {
 
 float AS5048A::getRotationDeg(bool median) {
 
-  return float(360.0 / float(AS5048A_ANGLE) * AS5048A::getRotation(median));
+  return float(360.0 / float(AS5048A_ANGLE) * (AS5048A::getRotation(median)));
 }
 
 float AS5048A::getRotationRad(bool median) {
@@ -392,6 +394,50 @@ void AS5048A::ProgAbsolAngleZeroPosit()
   Serial.println(AS5048A::getRawRotation(), DEC);
 }
 
+void AS5048A::ProgramAbsolZeroPosition(word zero_pos) {
+  word rotationzero = 0b0000000000000000;
+  word programcontrol = 0b00000000000000;
+
+  AS5048A::write(AS5048A_OTP_REGISTER_ZERO_POS_HIGH, AS5048A_NOP & ~0xFF00);
+  AS5048A::write(AS5048A_OTP_REGISTER_ZERO_POS_LOW, AS5048A_NOP & ~0xFFC0);
+
+  rotationzero |= zero_pos;
+
+  AS5048A::write(AS5048A_OTP_REGISTER_ZERO_POS_HIGH, (rotationzero >> 6) & 0xFF);
+  AS5048A::write(AS5048A_OTP_REGISTER_ZERO_POS_LOW, rotationzero & 0x3F);
+
+  AS5048A::write(AS5048A_PROGRAMMING_CONTROL, bitSet(programcontrol, 0));
+  AS5048A::write(AS5048A_PROGRAMMING_CONTROL, bitSet(programcontrol, 3));
+
+  if (1 < AS5048A::getRawRotation() < -1)
+  {
+    AS5048A::write(AS5048A_PROGRAMMING_CONTROL, bitSet(programcontrol, 6));
+  }
+
+  Serial.println(AS5048A::getRawRotation(), DEC);
+}
+
+void AS5048A::resetAbsolutZero() {
+  word rotationzero = 0b0000000000000000;
+  word programcontrol = 0b00000000000000;
+
+  AS5048A::write(AS5048A_OTP_REGISTER_ZERO_POS_HIGH, AS5048A_NOP & ~0xFF00);
+  AS5048A::write(AS5048A_OTP_REGISTER_ZERO_POS_LOW, AS5048A_NOP & ~0xFFC0);
+
+  AS5048A::write(AS5048A_OTP_REGISTER_ZERO_POS_HIGH, (rotationzero >> 6) & 0xFF);
+  AS5048A::write(AS5048A_OTP_REGISTER_ZERO_POS_LOW, rotationzero & 0x3F);
+
+  AS5048A::write(AS5048A_PROGRAMMING_CONTROL, bitSet(programcontrol, 0));
+  AS5048A::write(AS5048A_PROGRAMMING_CONTROL, bitSet(programcontrol, 3));
+
+  if (1 < AS5048A::getRawRotation() < -1)
+  {
+    AS5048A::write(AS5048A_PROGRAMMING_CONTROL, bitSet(programcontrol, 6));
+  }
+
+  Serial.println(AS5048A::getRawRotation(), DEC);
+}
+
 /**
  * Set the zero _position
  */
@@ -511,7 +557,7 @@ word AS5048A::read(word RegisterAddress, bool MeanValueMedian)
         readdata = (array_data[mid] + array_data[mid]) / 2;
       }
       else {
-        readdata = array_data[mid+1];
+        readdata = array_data[mid + 1];
       }
 
 

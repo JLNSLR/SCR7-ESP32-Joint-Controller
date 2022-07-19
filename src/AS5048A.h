@@ -78,6 +78,8 @@ public:
   int32_t _prev_rotation = 0;
   int32_t _n_rollovers = 0;
 
+  bool rollover_detection = true;
+
 
   /**
    * Get the rotation of the sensor relative to the zero position.
@@ -161,6 +163,12 @@ public:
    *as zero angle position
    */
   void ProgAbsolAngleZeroPosit();
+
+  void ProgramAbsolZeroPosition(word zero_pos);
+
+  void resetAbsolutZero();
+
+  void deactivate_rollover_detection(bool deactivate);
 
   /**
    * Set the zero position

@@ -7,6 +7,7 @@
 #include <NN/nn_utils.h>
 #include <NN/NeuralNetwork.h>
 #include <drive_system_settings.h>
+#include <CircularBuffer.h>
 
 struct inv_dynamics_sample {
     float input_vector[7];
@@ -43,6 +44,7 @@ private:
     static const int buffer_size = 50;
     inv_dynamics_sample sample_vector[buffer_size];
     int samples_in_buffer = 0;
+    
 
 
     float max_motor_torque = 1.92; //Nm

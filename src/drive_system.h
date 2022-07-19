@@ -162,6 +162,9 @@ void drvSys_reset_encoder_offset_data_on_Flash();
 void drvSys_save_alignment_to_Flash();
 bool drvSys_read_alignment_from_Flash();
 void drvSys_reset_alignment_data_on_Flash();
+
+void drvSys_setOffsets(float motor_offset, float joint_offset, bool save = true, bool reset = false);
+void drvSys_loadOffsets();
 //Controller Gains
 void drvSys_update_PID_gains(drvSys_PID_Gains gains);
 void drvSys_set_pos_PID_gains(float Kp, float Ki, float Kd, bool save = true);

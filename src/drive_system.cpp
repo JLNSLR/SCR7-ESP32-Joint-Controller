@@ -113,11 +113,17 @@ bool drvSys_axis_aligned_flag = false;
 bool nn_inv_initialized = false;
 bool nn_pid_initialized = false;
 
+float drvSys_angle_offset_motor = 0;
+float drvSys_angle_offset_joint = 0;
+
 
 // Axis Calibration Variables
 
-int32_t drvSys_raw_joint_encoder_offset = DRVSYS_RAW_JOINT_ENC_OFFSET;
-int32_t drvSys_raw_motor_encoder_offset = DRVSYS_RAW_MOTOR_ENC_OFFSET;
+int32_t drvSys_joint_encoder_offset = DRVSYS_RAW_JOINT_ENC_OFFSET;
+int32_t drvSys_joint_zero_set = false;
+int32_t drvSys_motor_encoder_offset = DRVSYS_RAW_MOTOR_ENC_OFFSET;
+int32_t drvSys_motor_encoder_rollovers = 0;
+
 bool drvSys_joint_calibrated_flag = false;
 
 /* Differentiators */
@@ -125,7 +131,6 @@ Differentiator drvSys_differentiator_motor_pos(DRVSYS_PROCESS_ENCODERS_FREQU);
 
 /* ########## Controllers ################ */
 PIDController drvSys_position_controller(0, 0, 0);
-float drvSys_joint_pos_p_gain = DRVSYS_JOINT_POS_ERROR_GAIN;
 float drvSys_vel_ff_gain = DRVSYS_VEL_FF_GAIN;
 
 
@@ -194,6 +199,7 @@ Preferences drv_sys_preferences;
 const char* drvSys_posPID_saved_gains = "posGains";
 const char* drvSys_velPID_saved_gains = "velGains";
 const char* drvSys_admittance_saved_gains = "admGains";
+const char* drvSys_saved_offsets = "offs";
 // Offset Calibration
 const char* drvSys_encoder_offset = "posOffset";
 // Alignment
@@ -306,14 +312,19 @@ void _drvSys_calibrate_with_hallsensor() {
 
     int32_t shift = DRVSYS_ANGLE_ORIGIN_2_HALL_DEG * (16383.0 / 360.0);
 
+    drvSys_magnetic_motor_encoder.resetAbsolutZero();
+    drvSys_magnetic_joint_encoder.resetAbsolutZero();
+
 
 
     drvSys_hall_sensor_val = analogRead(HALL_SENSOR_PIN);
 
+    int dir = 0;
+
     pinMode(TMC_STEP, OUTPUT);
     pinMode(TMC_DIR, OUTPUT);
 
-    digitalWrite(TMC_DIR, LOW);
+    digitalWrite(TMC_DIR, dir);
 
     drvSys_foc_controller.driver->direct_mode(false);
     //Reduce phase current to nominal value in stepper mode, to remain a cooler motor
@@ -334,6 +345,8 @@ void _drvSys_calibrate_with_hallsensor() {
     const int AS5048A_ANGLE = 0x3FFF;
 
 
+    word zero_pos_joint = 0;
+
     const int buffer_size = 50;
     CircularBuffer<float, buffer_size> buffer;
     CircularBuffer<float, buffer_size> buffer_noise;
@@ -343,6 +356,15 @@ void _drvSys_calibrate_with_hallsensor() {
     float prev_hall_val = analogRead(HALL_SENSOR_PIN);
 
     float start_angle = drvSys_magnetic_joint_encoder.getRotationDeg();
+
+
+    float noise_multiplier = 10;
+
+    int steps_since_maxima = 0;
+    int count_no_maxima = 0;
+
+    int n_rollovers_at_zero = 0;
+
 
 
     while (!calibration_finished) {
@@ -385,26 +407,45 @@ void _drvSys_calibrate_with_hallsensor() {
         Serial.print(" Average Hall noise value: ");
         Serial.println(average_noise_val);
 
-        if (current_average_val > average_hall_value + average_noise_val * 10) {
+        if (current_average_val > average_hall_value + average_noise_val * noise_multiplier) {
             if (current_average_val > largest_hall_value) {
-                raw_joint_angle = drvSys_magnetic_joint_encoder.getRotation(true) + shift;
-                raw_motor_angle = drvSys_magnetic_motor_encoder.getRotation(true) + shift * 1.0 / (drvSys_constants.transmission_ratio);
-                motor_rollovers = drvSys_magnetic_motor_encoder._n_rollovers;
+
+
+                n_rollovers_at_zero = drvSys_magnetic_motor_encoder._n_rollovers;
+                raw_motor_angle = drvSys_magnetic_motor_encoder.getRawRotation(true);
+
+                zero_pos_joint = drvSys_magnetic_joint_encoder.getRawRotation(true);
+
+                /*
+                zero_pos_joint = drvSys_magnetic_joint_encoder.getRawRotation(true);
+                zero_pos_motor = drvSys_magnetic_motor_encoder.getRawRotation(true);
+                */
+
+                noise_multiplier = 1;
 
                 largest_hall_value = current_average_val;
 
                 Serial.print(" New Hall maximum at: ");
-                Serial.println(raw_joint_angle);
+                Serial.println(zero_pos_joint);
 
                 found_peak = true;
                 //reduce step coint 
                 stepcount = DRVSYS_CAL_SMALL_STEPCOUNT;
+                steps_since_maxima = 0;
+            }
+        }
+        else {
+            count_no_maxima++;
+            if (count_no_maxima > 1000) {
+                stepcount = stepcount + 100;
+                count_no_maxima = 0;
             }
         }
 
         //Change direction when no peaks found after 90°
         if (abs(start_angle - drvSys_magnetic_joint_encoder.getRotationDeg()) >= limit_angle && found_peak == false) {
-            digitalWrite(TMC_DIR, HIGH);
+            dir = -dir;
+            digitalWrite(TMC_DIR, dir);
         }
 
 
@@ -412,32 +453,42 @@ void _drvSys_calibrate_with_hallsensor() {
         if ((current_average_val + average_noise_val - largest_hall_value) < 0 && found_peak) {
             n_falling++;
         };
-
-
-        // Finish Calibration 
-        if (n_falling > 100) {
-            calibration_finished = true;
-
-            drvSys_magnetic_joint_encoder.setOffsetAngle(raw_joint_angle);
-            drvSys_magnetic_motor_encoder._n_rollovers = 0;
-            drvSys_magnetic_motor_encoder.setOffsetAngle(raw_motor_angle - motor_rollovers * AS5048A_ANGLE);
-
-            drvSys_raw_joint_encoder_offset = raw_joint_angle;
-            drvSys_raw_motor_encoder_offset = raw_motor_angle;
-
-            Serial.println("DRVSYS_INFO: Joint Angle Offset Calibration finished");
-
-            drvSys_joint_calibrated_flag = true;
-
-        }
-
         // do a step
         for (int i = 0; i < stepcount; i++) {
             digitalWrite(TMC_STEP, HIGH);
-            delayMicroseconds(10);
+            delayMicroseconds(5);
             digitalWrite(TMC_STEP, LOW);
-            delayMicroseconds(10);
+            delayMicroseconds(5);
+            steps_since_maxima += stepcount;
         }
+
+        // Finish Calibration 
+        if (n_falling > 2000) {
+            calibration_finished = true;
+
+            //drvSys_magnetic_joint_encoder.setOffsetAngle(raw_joint_angle);
+
+            int32_t motor_zero_angle = raw_motor_angle;
+            drvSys_motor_encoder_offset = motor_zero_angle;
+            drvSys_motor_encoder_rollovers = n_rollovers_at_zero;
+
+            drvSys_magnetic_motor_encoder.setOffsetAngle(motor_zero_angle);
+            drvSys_magnetic_joint_encoder.ProgramAbsolZeroPosition(zero_pos_joint);
+            drvSys_joint_zero_set = true;
+
+
+            Serial.println("DRVSYS_INFO: Joint Angle Offset Calibration finished");
+
+
+
+            drvSys_joint_calibrated_flag = true;
+
+
+
+
+
+        }
+
 
 
     }
@@ -538,6 +589,8 @@ void _drvSys_load_parameters_from_Flash() {
     _drvSys_read_pos_PID_gains_from_flash();
     _drvSys_read_admittanceGains_from_flash();
 
+    //drvSys_loadOffsets();
+
 
 }
 
@@ -574,7 +627,6 @@ void drvSys_initialize() {
     drvSys_parameter_config.endStops_enabled = DRVSYS_LIMITS_ENABLED;
 
     drvSys_parameter_config.pid_gains.K_vel_ff = drvSys_vel_ff_gain;
-    drvSys_parameter_config.pid_gains.K_joint_P_gain = drvSys_joint_pos_p_gain;
 
 
     /* Setup Hall Pin */
@@ -608,6 +660,7 @@ void drvSys_initialize() {
     Serial.println("");
 
     drvSys_magnetic_motor_encoder.printErrors();
+    drvSys_magnetic_motor_encoder.rollover_detection = true;
 
     Serial.println("");
     Serial.println("###############################################");
@@ -629,6 +682,8 @@ void drvSys_initialize() {
     Serial.println("");
     Serial.println("###############################################");
     Serial.println("");
+
+    drvSys_magnetic_joint_encoder.rollover_detection = true;
 
     // Make sure mutexes are available
     xSemaphoreGive(drvSys_mutex_joint_position);
@@ -1126,7 +1181,6 @@ void drvSys_set_ff_gains(float gain, bool vel) {
     }
     else {
         drvSys_parameter_config.pid_gains.K_joint_P_gain = gain;
-        drvSys_joint_pos_p_gain = gain;
     }
 }
 
@@ -1359,6 +1413,8 @@ void _drvSys_process_encoders_task(void* parameters) {
 
             float motor_pos_sensor_val = drvSys_motor_encoder_dir_align * drvSys_magnetic_motor_encoder.last_sample * encoder2Rad * inverse_transmission;
 
+            motor_pos_sensor_val = motor_pos_sensor_val;
+
             KinematicStateVector motor_state = motor_kinematic_kalman_filter.estimateStates(motor_pos_sensor_val);
 
             xSemaphoreTake(drvSys_mutex_motor_position, portMAX_DELAY);
@@ -1375,8 +1431,12 @@ void _drvSys_process_encoders_task(void* parameters) {
 
 
             xSemaphoreTake(glob_SPI_mutex, portMAX_DELAY);
-            float raw_joint_angle_rad = drvSys_joint_encoder_dir_align * drvSys_magnetic_joint_encoder.getRotationRad(true);
+            float raw_joint_angle_rad = drvSys_joint_encoder_dir_align * drvSys_magnetic_joint_encoder.getRotationCentered(true) * encoder2Rad;
             xSemaphoreGive(glob_SPI_mutex);
+
+
+            if (raw_joint_angle_rad)
+                raw_joint_angle_rad = raw_joint_angle_rad - drvSys_angle_offset_joint - drvSys_joint_encoder_offset;
 
             KinematicStateVector joint_state = joint_kinematic_kalman_filter.estimateStates(raw_joint_angle_rad);
 
@@ -1464,8 +1524,6 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
                 if (pos_target_joint - actual_pos_motor < 0) {
                     sign = -1.0;
                 }
-
-                float pos_setpoint = pos_target_joint + drvSys_joint_pos_p_gain * sign * abs(pos_target_joint - actual_pos_joint);
 
                 drvSys_position_controller.setSetPoint(pos_target_joint, false);
 
@@ -1653,7 +1711,6 @@ void drvSys_update_PID_gains(drvSys_PID_Gains gains) {
     drvSys_parameter_config.pid_gains.K_joint_P_gain = gains.K_joint_P_gain;
 
     drvSys_vel_ff_gain = gains.K_vel_ff;
-    drvSys_joint_pos_p_gain = gains.K_joint_P_gain;
 
     // Write them to controller instance
     drvSys_position_controller.setTuning(gains.K_p, gains.K_i, gains.K_d);
@@ -1666,15 +1723,13 @@ bool drvSys_read_encoder_offsets_from_Flash() {
     bool data_available = drv_sys_preferences.getBool("off_avail", false);
 
     if (data_available) {
-        drvSys_raw_joint_encoder_offset = drv_sys_preferences.getInt("joint", 0);
-        drvSys_raw_motor_encoder_offset = drv_sys_preferences.getInt("motor", 0);
+        drvSys_motor_encoder_offset = drv_sys_preferences.getInt("motor", 0);
+        drvSys_motor_encoder_rollovers = drv_sys_preferences.getInt("m_roll", 0);
+        drvSys_magnetic_motor_encoder._n_rollovers = drvSys_motor_encoder_rollovers;
+        drvSys_magnetic_motor_encoder.setOffsetAngle(drvSys_motor_encoder_offset);
+        drvSys_joint_zero_set = drv_sys_preferences.getBool("j_set", false);
 
-        drvSys_magnetic_joint_encoder.setOffsetAngle(drvSys_raw_joint_encoder_offset);
-        drvSys_magnetic_motor_encoder._n_rollovers = 0;
-        drvSys_magnetic_motor_encoder.setOffsetAngle(drvSys_raw_motor_encoder_offset);
-
-
-        Serial.println(drvSys_raw_motor_encoder_offset);
+        Serial.println(drvSys_motor_encoder_offset);
 
         Serial.println("DRVSYS_INFO: Read Encoder Offsets from Flash.");
         drvSys_joint_calibrated_flag = true;
@@ -1692,8 +1747,9 @@ void drvSys_save_encoder_offsets_to_Flash() {
 
     drv_sys_preferences.begin(drvSys_encoder_offset, false);
     drv_sys_preferences.putBool("off_avail", true);
-    drv_sys_preferences.putInt("joint", drvSys_raw_joint_encoder_offset);
-    drv_sys_preferences.putInt("motor", drvSys_raw_motor_encoder_offset);
+    drv_sys_preferences.putInt("motor", drvSys_motor_encoder_offset);
+    drv_sys_preferences.putInt("m_roll", drvSys_motor_encoder_rollovers);
+    drv_sys_preferences.putBool("j_set", drvSys_joint_zero_set);
     drv_sys_preferences.end();
 
     Serial.println("DRVSYS_INFO: Saved Encoder Offsets to Flash.");
@@ -1706,6 +1762,7 @@ void drvSys_reset_encoder_offset_data_on_Flash() {
     drv_sys_preferences.putBool("off_avail", false);
     drv_sys_preferences.putInt("joint", 0);
     drv_sys_preferences.putInt("motor", 0);
+    drv_sys_preferences.putInt("m_roll", 0);
     drv_sys_preferences.end();
 
     Serial.println("DRVSYS_INFO: Removed Encoder Offsets to Flash.");
@@ -1832,6 +1889,52 @@ void drvSys_save_admittance_params() {
 
     drv_sys_preferences.end();
 };
+
+void drvSys_setOffsets(float motor_offset_deg, float joint_offset_deg, bool save, bool reset) {
+
+
+    if (motor_offset_deg == 0) {
+        drvSys_angle_offset_joint = joint_offset_deg * DEG2RAD;
+    }
+    else if (joint_offset_deg == 0) {
+        drvSys_angle_offset_motor = motor_offset_deg * DEG2RAD;
+    }
+    else {
+        drvSys_angle_offset_joint = joint_offset_deg * DEG2RAD;
+        drvSys_angle_offset_motor = motor_offset_deg * DEG2RAD;
+    }
+
+
+    if (save) {
+        drv_sys_preferences.begin(drvSys_saved_offsets, false);
+        drv_sys_preferences.putFloat("motor", drvSys_angle_offset_motor);
+        drv_sys_preferences.putFloat("joint", drvSys_angle_offset_joint);
+        drv_sys_preferences.end();
+
+        Serial.println("DRVSYS_INFO: Saved Offset Angles");
+    }
+    if (reset) {
+        drv_sys_preferences.begin(drvSys_saved_offsets, false);
+        drv_sys_preferences.putFloat("motor", 0);
+        drv_sys_preferences.putFloat("joint", 0);
+        drv_sys_preferences.end();
+
+        Serial.println("DRVSYS_INFO: Reset Offset Angles");
+    }
+}
+
+void drvSys_loadOffsets() {
+    drv_sys_preferences.begin(drvSys_saved_offsets, false);
+    drvSys_angle_offset_motor = drv_sys_preferences.getFloat("motor", drvSys_angle_offset_joint);
+    drvSys_angle_offset_joint = drv_sys_preferences.getFloat("joint", drvSys_angle_offset_motor);
+    drv_sys_preferences.end();
+
+    Serial.print("DRVSYS_INFO: Loading Motor Offset Angle: ");
+    Serial.println(drvSys_angle_offset_motor);
+    Serial.print("DRVSYS_INFO: Loading Joint Offset Angle: ");
+    Serial.println(drvSys_angle_offset_joint);
+
+}
 
 bool _drvSys_read_pos_PID_gains_from_flash() {
     /* Rea dand set position PID Settings */

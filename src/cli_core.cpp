@@ -111,6 +111,9 @@ void cli_execute_line_cmd() {
     if (!processed_cmd) {
         processed_cmd = jctrl_cli_process_motion_planner_commands(cli_args);
     }
+    if (!processed_cmd) {
+        processed_cmd = jctrl_cli_manage_calibration_command(cli_args);
+    }
 
 
 

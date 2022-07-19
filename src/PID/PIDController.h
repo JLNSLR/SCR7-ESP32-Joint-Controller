@@ -44,6 +44,8 @@ public:
 
     void setSetPoint(float setpoint, bool reset_I = false);
 
+    void backlash_compensator(float backlash_thres, float kp, float ki);
+
 
     /* ---  working variables --- */
 

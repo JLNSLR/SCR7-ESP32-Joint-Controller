@@ -380,7 +380,6 @@ bool jctrl_cli_manage_calibration_command(char(*cli_arg)[N_MAX_ARGS]) {
     char* keyword = cli_arg[0];
     char* keyword_0 = cli_arg[1];
     char* value_1 = cli_arg[2];
-    ;
 
 
     bool processed = false;
@@ -388,10 +387,27 @@ bool jctrl_cli_manage_calibration_command(char(*cli_arg)[N_MAX_ARGS]) {
     if (strcmp(keyword, "cal") == 0) {
         processed = true;
 
-        if (strcmp(keyword, "del") == 0) {
+        if (strcmp(keyword_0, "del") == 0) {
             drvSys_reset_encoder_offset_data_on_Flash();
             _jctrl_cli_feedback_output("Deleted Calibration Data on Flash");
 
+        }
+
+    }
+
+    if (strcmp(keyword, "offset") == 0) {
+        processed = true;
+
+        if (strcmp(keyword_0, "m") == 0) {
+            float m_offset = atof(value_1);
+            drvSys_setOffsets(m_offset, 0, true, false);
+        }
+        if (strcmp(keyword_0, "j") == 0) {
+            float j_offset = atof(value_1);
+            drvSys_setOffsets(0, j_offset, true, false);
+        }
+        if (strcmp(keyword_0, "reset") == 0) {
+            drvSys_setOffsets(0, 0, false, true);
         }
 
     }

@@ -49,7 +49,7 @@ void setup()
   // Calibration of FOC
   //drvSys_calibrate_FOC();
 
-  drvSys_start_motion_control(dual_control);
+  //drvSys_start_motion_control(dual_control);
 
   /** Setup ASCI Interface */
 
