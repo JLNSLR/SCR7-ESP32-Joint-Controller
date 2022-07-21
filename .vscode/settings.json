@@ -2,7 +2,8 @@
 	"files.associations": {
 		"*.tpp": "cpp",
 		"new": "cpp",
-		"cmath": "cpp"
+		"cmath": "cpp",
+		"streambuf": "cpp"
 	},
 	"C_Cpp.errorSquiggles": "Disabled"
 }

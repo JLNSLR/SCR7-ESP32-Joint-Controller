@@ -32,13 +32,11 @@ void KinematicKalmanFilter::init(float delta_t) {
     observer_matrix_H_vel.Fill(0);
     observer_matrix_H_vel(1, 1) = 1;
 
+    z_n.Fill(0);
+
 
     //initial error covariance_matrix;
 
-    errorCovariance.Fill(0);
-    errorCovariance(0, 0) = 1e-2;
-    errorCovariance(1, 1) = 1;
-    errorCovariance(2, 2) = 10;
 
 
     // System_noise matrix
@@ -67,6 +65,11 @@ void KinematicKalmanFilter::init(float delta_t) {
     system_noise_matrix = system_noise_matrix * acc_value * acc_value;
 
 
+
+    errorCovariance.Fill(0);
+    errorCovariance = system_noise_matrix * 1e2;
+
+
     /*
 
     system_noise_matrix.Fill(0);
@@ -82,7 +85,7 @@ void KinematicKalmanFilter::init(float delta_t) {
     identity_matrix(1, 1) = 1;
     identity_matrix(2, 2) = 1;
 
-    sensor_noise = 0.05 * DEG2RAD; // DEG
+    sensor_noise = 0.025 * DEG2RAD; // DEG
 
 
     /*
@@ -123,8 +126,6 @@ void KinematicKalmanFilter::correctionStep() {
 
     kalman_Gain = errorCovariance * (~observer_matrix_H) * divisor;
 
-    BLA::Matrix<3> z_n;
-    z_n.Fill(0);
     z_n(0) = position_sensor_val;
 
     x_corrected = x_current + kalman_Gain * (z_n - observer_matrix_H * x_current);
@@ -147,8 +148,6 @@ void KinematicKalmanFilter::correctionStep_vel(float velocity_derivative) {
 
     kalman_Gain = errorCovariance * (~observer_matrix_H_vel) * divisor;
 
-    BLA::Matrix<3> z_n;
-    z_n.Fill(0);
     z_n(1) = velocity_derivative;
 
     x_corrected = x_current + kalman_Gain * (z_n - observer_matrix_H_vel * x_current);
@@ -172,29 +171,11 @@ KinematicStateVector KinematicKalmanFilter::getEstimatedState() {
 
 KinematicStateVector KinematicKalmanFilter::estimateStates(float position_sensor_val) {
 
-    /*
-    static float prev_position_sensor_val = 0;
-    static float divisor = 1.0 / delta_t;
-    static float prev_vel_derivative = 0;
-
-    static const float alpha = 0.5;
-    */
-
-
     this->position_sensor_val = position_sensor_val;
-
-    /*
-    float velocity_derivative = (position_sensor_val - prev_position_sensor_val) * divisor;
-
-    velocity_derivative = velocity_derivative * alpha + prev_vel_derivative * (1.0 - alpha);
-    */
-
-
 
     predictionStep();
 
     correctionStep();
-    //correctionStep_vel(velocity_derivative);
 
     return getEstimatedState();
 

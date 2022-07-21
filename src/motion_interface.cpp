@@ -2,8 +2,7 @@
 #include<CircularBuffer.h>
 
 TaskHandle_t motion_sequencer_th;
-
-MotionPlanner motion_planner(MOTION_MAX_VEL, MOTION_MAX_ACC, MOTION_MAX_ACC, MOTION_MAX_JERK, MOTION_MAX_JERK);
+extern MotionPlanner motion_planner(MOTION_MAX_VEL, MOTION_MAX_ACC, MOTION_MAX_ACC, MOTION_MAX_JERK, MOTION_MAX_JERK);
 
 motion_control_mode motion_mode = position;
 

@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <Arduino.h>
 
+//#define NN_DEBUG
+
 NeuralNetwork::NeuralNetwork(const int depth, int* width, nn_activation_f* f_act_per_layer) :
     depth(depth), width(width), activation_function_per_layer(f_act_per_layer) {
 
@@ -181,11 +183,9 @@ float* NeuralNetwork::get_output() {
 
 float NeuralNetwork::train_SGD(float inputs[], float targets[]) {
 
-
     set_input(inputs);
     propagate_forward();
     float total_error = backpropagation(inputs, targets);
-
     apply_gradient_descent(update_rule);
 
     return total_error;
@@ -600,6 +600,9 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
 #ifdef NN_DEBUG
     Serial.println("NN: Apply Gradient Descent");
 #endif // NN_DEBUG
+
+
+    apply_learning_rate_scheduler();
     float*** weight_gradients;
 
 
@@ -671,7 +674,6 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
         }
     }
 
-    apply_learning_rate_scheduler();
 
 
 }
@@ -1071,7 +1073,7 @@ void NeuralNetwork::apply_learning_rate_scheduler() {
     }
 
     if (lr_schedule == error_adaptive) {
-        learning_rate = minimal_learning_rate + lr_error_factor * filtered_error;
+        learning_rate = minimal_learning_rate + lr_error_factor * current_error;
 
     }
 

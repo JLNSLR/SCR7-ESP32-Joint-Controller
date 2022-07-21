@@ -10,8 +10,14 @@
 #include <CircularBuffer.h>
 
 struct inv_dynamics_sample {
-    float input_vector[7];
-    float output;
+    float joint_pos_norm;
+    float joint_vel_norm;
+    float joint_acc_norm;
+    float motor_pos_norm;
+    float motor_vel_norm;
+    float motor_acc_norm;
+    float joint_torque;
+    float output_motor_torque_norm;
 };
 
 class InverseDynamicsLearner {
@@ -24,6 +30,10 @@ public:
     void add_data(const drvSys_FullDriveState state);
     bool learning_step();
 
+    static const int depth = 4;
+    int width[depth] = { 7,7,5,1 };
+    nn_activation_f activation[depth - 1] = { leakyReLu, leakyReLu, Linear };
+
     NeuralNetwork* nn;
 
     bool activate_automatic = true;
@@ -34,18 +44,14 @@ public:
     float prediction_error = 100.0;
     float delta_prediction_error = 100.0;
 
-    bool control_active = false;
     float prediction_error_threshold = 0.01;
     bool saved_weights = false;
-
 
 
 private:
     static const int buffer_size = 50;
 
     CircularBuffer<inv_dynamics_sample, buffer_size> buffer;
-
-
 
     float max_motor_torque = 1.92; //Nm
     float max_vel = 300 * DEG2RAD; //rad/s
@@ -61,16 +67,13 @@ private:
     bool low_learning_mode = false;
     long low_error_iterations = 0;
 
-    SemaphoreHandle_t mutex_inverse_dyn_network = xSemaphoreCreateBinary();;
+    SemaphoreHandle_t mutex_inverse_dyn_network;
+    SemaphoreHandle_t mutex_training_buffer;
 
     const float max_angle = 180 * DEG2RAD;
     const float inv_max_angle = 1.0 / max_angle;
 
-    void addSampleToBuffer(inv_dynamics_sample sample);
-    inv_dynamics_sample takeSampleFromBuffer();
 
-    void randomize(inv_dynamics_sample arr[], int n);
-    void swap(inv_dynamics_sample* a, inv_dynamics_sample* b);
 
 };
 

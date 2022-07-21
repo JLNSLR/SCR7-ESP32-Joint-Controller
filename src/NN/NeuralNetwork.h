@@ -117,6 +117,7 @@ public:
     float filtered_error = 0.0;
     float filtered_error_alpha = 1e-4;
     float filtered_error_td = 0.0;
+        float current_error = 0.0;
 
     //Threshold for huber loss
     float huber_threshold = 1.35;
@@ -148,7 +149,6 @@ private:
     float* weight_vector;
     float backprop_batch_mode = false;
 
-    float current_error = 0.0;
     float prev_error = 0.0;
 
     float** neuron_derivatives; //for backpropagation to calculate the networks gradient net y = f(x) -> y' = f'(x')

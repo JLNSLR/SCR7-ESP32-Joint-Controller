@@ -9,10 +9,12 @@
 #define MOTION_MAX_VEL 140.0*DEG2RAD
 
 #define MOTION_SEQUENCER_CORE 1
-#define MOTION_SEQUENCER_PRIO 7
+#define MOTION_SEQUENCER_PRIO 8
 #define MOTION_SEQUENCER_STACK_SIZE 2000
 
 #define MOTION_SEQUENCER_PERIOD_MS 1
+
+extern MotionPlanner motion_planner;
 
 enum motion_control_mode { position, trajectory };
 

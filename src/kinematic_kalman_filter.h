@@ -47,7 +47,7 @@ public:
 
     float position_sensor_val;
 
-    float accel_change = 5.0*DEG2RAD;
+    float accel_change = 5.0 * DEG2RAD;
 
 private:
 
@@ -68,6 +68,7 @@ private:
     BLA::Matrix<3, 3> identity_matrix;
 
     BLA::Matrix<3> b_vec;
+    BLA::Matrix<3> z_n;
 
     float sensor_noise;
 
