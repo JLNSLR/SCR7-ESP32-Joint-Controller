@@ -4,15 +4,15 @@
 /* Drive System State Flag */
 enum drvSys_StateFlag { error, not_ready, ready, foc_direct_torque, closed_loop_control_active, closed_loop_control_inactive };
 /*Drive System Control Mode Variables */
-enum drvSys_controlMode { direct_torque, dual_control, admittance_control };
+enum drvSys_controlMode { direct_torque, closed_loop_foc, admittance_control, stepper_mode };
 
 extern drvSys_controlMode drvSys_mode;
 extern drvSys_StateFlag drvSys_state_flag;
 
 /* Drive System Priority constants */
 enum drvSys_priorities {
-    foc_prio = 10, process_sensor_prio = 9, torque_control_prio = 9,
-    pid_dual_control_prio = 8, admittance_control_prio = 6, learn_dynamics_prio = 7
+    foc_prio = 10, process_sensor_prio = 10, torque_control_prio = 9,
+    pid_dual_control_prio = 9, admittance_control_prio = 6, learn_dynamics_prio = 7
 };
 
 struct drvSys_PID_Gains {
@@ -20,7 +20,6 @@ struct drvSys_PID_Gains {
     float K_i;
     float K_d;
     float K_vel_ff;
-    float K_joint_P_gain;
 
 };
 
@@ -52,6 +51,11 @@ struct drvSys_FullDriveState {
     float motor_pos;
     float motor_vel;
     float motor_acc;
+};
+
+struct drvSys_FullDriveStateExt {
+    drvSys_FullDriveState state;
+    drvSys_FullDriveState state_prev;
 };
 
 struct drvSys_driveTargets {

@@ -1,5 +1,5 @@
 #include "signal_processing/IIRFilter.h"
-//#define IIRDEBUG
+#define IIRDEBUG
 
 template <size_t order>
 IIRFilter<order>::IIRFilter()
@@ -55,6 +55,7 @@ void IIRFilter<order>::setCoefficients(float* a_coefficients_fl, float* b_coeffi
             this->b_coefficients[i] = b_coefficients_fl[i];
         }
     }
+    
 }
 
 template <size_t order>

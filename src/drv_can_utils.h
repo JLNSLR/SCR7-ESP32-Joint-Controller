@@ -145,7 +145,7 @@ struct drvComm_motion_data {
 /*
 drvComm_MotionCmd drvComm_gen_motion_command(drv_can_motionCmdType type, float pos = 0, float vel = 0, float torque = 0);
 
-drvComm_controllerCmd drvComm_gen_controller_command(bool start = true, bool stop = false, drvSys_controlMode control_mode = dual_control);
+drvComm_controllerCmd drvComm_gen_controller_command(bool start = true, bool stop = false, drvSys_controlMode control_mode = closed_loop_foc);
 
 drvComm_paramsCmd drvComm_gen_params_command(drvComm_parameterType type, float param_value);
 

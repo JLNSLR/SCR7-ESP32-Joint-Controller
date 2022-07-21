@@ -28,14 +28,14 @@
 /* --- Timing Constants --- */
 #define DRVSYS_FOC_PERIOD_US 200 //us -> 5kHz
 //Encoder Processing
-#define DRVSYS_PROCESS_ENCODERS_PERIOD_US 250 //us -> 3kHz
-#define DRVSYS_PROCESS_ENCODERS_FREQU 4000 //Hz
+#define DRVSYS_PROCESS_ENCODERS_PERIOD_US 500 //us -> 3kHz
+#define DRVSYS_PROCESS_ENCODERS_FREQU 2000 //Hz
 // Torque Target Control 
-#define DRVSYS_CONTROL_TORQUE_PERIOD_US 333 // us 
-#define DRVSYS_CONTROL_TORQUE_FREQU 3000 // Hz
+#define DRVSYS_CONTROL_TORQUE_PERIOD_US 400 // us 
+#define DRVSYS_CONTROL_TORQUE_FREQU 2500 // Hz
 // PID Controller
-#define DRVSYS_CONTROL_POS_PERIOD_US 500 //us 2000Hz
-#define DRVSYS_CONTROL_POS_FREQ 2000 //Hz
+#define DRVSYS_CONTROL_POS_PERIOD_US 1000 //us 2000Hz
+#define DRVSYS_CONTROL_POS_FREQ 1000 //Hz
 // Torque Sensor Processing
 #define DRVSYS_PROCESS_TORQUE_SENSOR_PERIOD_MS 333
 
@@ -90,7 +90,7 @@ int32_t drvSys_start_foc_processing();
  * @brief starts the motion controllers depending on the control mode
  *
  */
-int32_t drvSys_start_motion_control(drvSys_controlMode = dual_control);
+int32_t drvSys_start_motion_control(drvSys_controlMode = closed_loop_foc);
 
 void drvSys_stop_controllers();
 
@@ -103,6 +103,7 @@ const drvSys_driveState drvSys_get_drive_state();
 const drvSys_FullDriveState drvSys_get_full_drive_state();
 const drvSys_Constants drvSys_get_constants();
 const drvSys_driveTargets drvSys_get_targets();
+const drvSys_FullDriveStateExt drvSys_get_extended_full_drive_state();
 
 /**
  * @brief sets the target values for the joint controller including
@@ -156,7 +157,7 @@ void _drvSys_load_parameters_from_Flash();
 
 // Calibration
 void drvSys_save_encoder_offsets_to_Flash();
-bool drvSys_read_encoder_offsets_from_Flash();
+bool drv_Sys_check_if_joint_encoder_is_calibrated();
 void drvSys_reset_encoder_offset_data_on_Flash();
 // Alignment
 void drvSys_save_alignment_to_Flash();
@@ -168,20 +169,10 @@ void drvSys_loadOffsets();
 //Controller Gains
 void drvSys_update_PID_gains(drvSys_PID_Gains gains);
 void drvSys_set_pos_PID_gains(float Kp, float Ki, float Kd, bool save = true);
-void drvSys_set_ff_gains(float gain, bool vel);
+void drvSys_set_ff_gains(float gain);
 void drvSys_save_pos_PID_gains();
 
 void drvSys_limit_torque(float torque_limit);
-
-/**
- * @brief
- *
- * @param type 0 - pos, 1 - vel
- * @param filter_alpha - alpha of exponential output filter 0.0 = inactive
- * @param deadzone - error deadzone
- */
-void drvSys_set_advanced_PID_settings(int type = 0, float filter_alpha = 0.0, float deadzone = 0.0, bool active = true);
-
 
 void drvSys_set_admittance_params(float virtual_spring, float virtual_damping, float virtual_inertia, bool save = true);
 void drvSys_save_admittance_params();
@@ -220,8 +211,8 @@ void _drvSys_learn_dynamics_task(void* parameters);
 void drvSys_inv_dyn_nn_set_max_learning_iterations_per_step(unsigned int n_iterations);
 void drvSys_inv_dyn_nn_activate_control(bool active);
 void drvSys_inv_dyn_nn_set_learning_rate(float lr, float lr_error_scale);
-float drvSys_inv_dyn_nn_pred_error_filtered();
-float _drvSys_inv_dyn_nn_predict_torque();
+float drvSys_inv_dyn_nn_pred_error();
+float _drvSys_inv_dyn_nn_predict_torque(bool target = false);
 float drvSys_inv_dyn_read_predicted_torque();
 
 // Neural Network PID Tuner 

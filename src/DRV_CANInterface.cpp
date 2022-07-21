@@ -154,7 +154,7 @@ void CANInterface::process_motion_command(drvComm_MotionCmd motion_cmd) {
 
     if (motion_cmd.type == traj_command) {
 
-        if (drvSys_mode == dual_control && drvSys_mode == admittance_control) {
+        if (drvSys_mode == closed_loop_foc && drvSys_mode == admittance_control) {
             float target_pos = float(motion_cmd.traj_target.pos) * MAX_POS_FACTOR;
             float vel_ff = float(motion_cmd.traj_target.vel_ff) * MAX_VEL_FACTOR;
             float torque_ff = float(motion_cmd.traj_target.torque_ff) * motor_torque_factor;

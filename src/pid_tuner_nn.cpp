@@ -179,7 +179,6 @@ drvSys_PID_Gains PID_Tuner_NN::predictOptimalGains(const drvSys_FullDriveState s
     gains.K_i = gain_vector_pointer[1];
     gains.K_d = gain_vector_pointer[2];
     gains.K_vel_ff = gain_vector_pointer[3];
-    gains.K_joint_P_gain = gain_vector_pointer[4];
 
     return gains;
 

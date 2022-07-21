@@ -133,7 +133,6 @@ bool jctrl_cli_process_pid_command(char(*cli_arg)[N_MAX_ARGS]) {
 
     char* keyword = cli_arg[0];
     char* keyword_2 = cli_arg[1];
-    char* keyword_3 = cli_arg[2];
     bool processed = false;
 
     if (strcmp(keyword, "pid") == 0 || strcmp(keyword, "PID") == 0) {
@@ -158,13 +157,8 @@ bool jctrl_cli_process_pid_command(char(*cli_arg)[N_MAX_ARGS]) {
         }
 
         if (strcmp(keyword_2, "vel_ff") == 0) {
-            float k_vel = atof(cli_arg[3]);
-            drvSys_set_ff_gains(k_vel, true);
-        }
-        if (strcmp(keyword_2, "jgain") == 0) {
-            float j_Pgain = atof(cli_arg[3]);
-            drvSys_set_ff_gains(j_Pgain, false);
-
+            float k_vel = atof(cli_arg[2]);
+            drvSys_set_ff_gains(k_vel);
         }
 
     }
@@ -190,7 +184,7 @@ bool jctrl_cli_process_drive_sys_command(char(*cli_arg)[N_MAX_ARGS]) {
         if (state.state_flag == foc_direct_torque || state.state_flag == closed_loop_control_inactive) {
 
             if (mode == 0) {
-                drvSys_start_motion_control(dual_control);
+                drvSys_start_motion_control(closed_loop_foc);
 
                 _jctrl_cli_feedback_output("Started motion control in dual control mode.");
                 return processed;
@@ -262,6 +256,11 @@ bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]) {
         if (strcmp(mode, "tune_pos") == 0) {
             cli_output_active = true;
             cli_out_mode = tune_pos;
+            return processed;
+        }
+        if (strcmp(mode, "nn_inv") == 0) {
+            cli_output_active = true;
+            cli_out_mode = nn_inv;
             return processed;
         }
 
@@ -557,13 +556,13 @@ void _jctrl_cli_output_periodic() {
     if (cli_out_mode == nn_inv) {
         drvSys_driveState state = drvSys_get_drive_state();
         float torque_pred = drvSys_inv_dyn_read_predicted_torque();
-        float error = drvSys_inv_dyn_nn_pred_error_filtered();
+        float error = drvSys_inv_dyn_nn_pred_error();
 
-        Serial.print(state.motor_torque);
+        Serial.print(state.motor_torque * 100);
         Serial.print("\t");
-        Serial.print(torque_pred);
+        Serial.print(torque_pred * 100);
         Serial.print("\t");
-        Serial.println(error);
+        Serial.println(error * 100);
     }
 
     if (cli_out_mode == nn_pid) {
@@ -585,9 +584,8 @@ void _jctrl_cli_output_periodic() {
         Serial.print("\t");
         Serial.print(gains.K_d);
         Serial.print("\t");
-        Serial.print(gains.K_vel_ff);
-        Serial.print("\t");
-        Serial.println(gains.K_joint_P_gain);
+        Serial.println(gains.K_vel_ff);
+
 
 
 
