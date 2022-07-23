@@ -52,14 +52,14 @@ public:
     NeuralNetwork(int depth, int width[], nn_activation_f f_act_per_layer[]);
     ~NeuralNetwork();
     void propagate_forward();
-    float train_SGD(float inputs[], float targets[]);
-    float train_SGD(sample_t samples[], int n_samples);
-    float train_SGD_ext_loss(float inputs[], float ext_loss, float ext_loss_derivative[]);
+    float train_SGD(float* inputs, float* targets);
+    float train_SGD_S(sample_t samples[], int n_samples);
+    float train_SGD_ext_loss(float* inputs, float ext_loss, float* ext_loss_derivative);
     float train_batch(batch_t batch);
     float train_batch(batch_loss_t batch_ext_loss);
 
-    float backpropagation(float inputs[], float targets[]);
-    float backpropagation(float inputs[], float loss, float loss_derivatives[]);
+    float backpropagation(float* inputs, float* targets);
+    float backpropagation(float* inputs, float loss, float* loss_derivatives);
 
     float* predict(float input_vector[]);
     void set_input(float input_vector[]);
@@ -111,28 +111,25 @@ public:
     float reg_penalty_factor = 1e-8;
     float barrier_softness = 1e-3;
     // Gradient Clipping
-    float max_gradient_abs = 1000;
+    float max_gradient_abs = 100.0;
 
     //Error estimate
     float filtered_error = 0.0;
-    float filtered_error_alpha = 1e-4;
+    float filtered_error_alpha = 1e-2;
     float filtered_error_td = 0.0;
-        float current_error = 0.0;
 
     //Threshold for huber loss
     float huber_threshold = 1.35;
 
 
     //Learning Rate scheduler
-
-    float lr_error_factor = 1e-2;
-
     int n_iterations = 0;
+    float lr_error_factor = 1e-3;
     nn_learning_rate_schedule lr_schedule = no_schedule;
     float decay_factor = 1e-4;
     float minimal_learning_rate = 1e-3;
-    float maximal_learning_rate = 5e-2;
-    int n_warm_restart_period = 1e3;
+    float maximal_learning_rate = 8e-3;
+    int n_warm_restart_period = 1e4;
     int n_warm_restart_multiplier = 1.25;
     bool cosine_decay = true;
 
@@ -149,7 +146,10 @@ private:
     float* weight_vector;
     float backprop_batch_mode = false;
 
+    float current_error = 0.0;
     float prev_error = 0.0;
+
+    float* targets;
 
     float** neuron_derivatives; //for backpropagation to calculate the networks gradient net y = f(x) -> y' = f'(x')
     float** network_jacobian;
@@ -189,6 +189,7 @@ private:
     float fast_inv_sqrt(float number);
     float random_float(float max, float min);
 
+    void error_adaptive_learning_rate(float min_learning_rate, float max_learning_rate, float slope);
     void apply_learning_rate_scheduler();
 
 

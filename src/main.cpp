@@ -123,17 +123,16 @@ void loop()
 
 
 
-  /*
     counter++;
 
-    if (counter % 500 == 0) {
+    if (counter % 600 == 0) {
 
       if (!motion_planner.executing_traj_flag) {
         target = (float(rand()) / float(RAND_MAX)) * 175;
         if (counter % 5 == 0) {
           dir = -dir;
         }
-        vel = (float(rand()) / float(RAND_MAX)) * 90.0;
+        vel = (float(rand()) / float(RAND_MAX)) * 60.0;
         acc = (float(rand()) / float(RAND_MAX)) * 1000.0;
 
         handle_motion_command(target * DEG2RAD * dir, vel * DEG2RAD, acc * DEG2RAD);
@@ -141,7 +140,6 @@ void loop()
 
 
     }
-    */
 
     /*
      Serial.println("Sending packet");

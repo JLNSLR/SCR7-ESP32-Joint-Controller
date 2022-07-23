@@ -54,7 +54,7 @@ void handle_motion_command(float target_pos) {
 
 void handle_motion_command(float target_pos, float travel_vel, float travel_acc) {
     motion_mode = position;
-    if (motion_planner.executing_traj_flag) {
+    if (!motion_planner.executing_traj_flag) {
 
         float start = drvSys_get_drive_state().joint_pos;
         motion_planner.planMotion(start, target_pos, travel_vel, travel_acc);
@@ -76,6 +76,8 @@ void handle_motion_command(drvSys_driveTargets target_traj_point) {
     drvSys_set_target(target_traj_point);
     no_commands_given = false;
 }
+
+
 
 void _motion_sequencer_task(void* parameters) {
 

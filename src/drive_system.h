@@ -103,7 +103,7 @@ const drvSys_driveState drvSys_get_drive_state();
 const drvSys_FullDriveState drvSys_get_full_drive_state();
 const drvSys_Constants drvSys_get_constants();
 const drvSys_driveTargets drvSys_get_targets();
-const drvSys_FullDriveStateExt drvSys_get_extended_full_drive_state();
+drvSys_FullDriveStateExt drvSys_get_extended_full_drive_state();
 
 /**
  * @brief sets the target values for the joint controller including
@@ -211,9 +211,12 @@ void _drvSys_learn_dynamics_task(void* parameters);
 void drvSys_inv_dyn_nn_set_max_learning_iterations_per_step(unsigned int n_iterations);
 void drvSys_inv_dyn_nn_activate_control(bool active);
 void drvSys_inv_dyn_nn_set_learning_rate(float lr, float lr_error_scale);
-float drvSys_inv_dyn_nn_pred_error();
-float _drvSys_inv_dyn_nn_predict_torque(bool target = false);
+float drvSys_inv_dyn_nn_control_error();
+float _drvSys_inv_dyn_nn_predict_torque();
 float drvSys_inv_dyn_read_predicted_torque();
+float drvSys_get_pid_torque();
+drvSys_driveState drvSys_get_forward_model_pred();
+
 
 // Neural Network PID Tuner 
 

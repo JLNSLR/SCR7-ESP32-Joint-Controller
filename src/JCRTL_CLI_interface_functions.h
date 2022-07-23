@@ -5,7 +5,7 @@
 extern bool jcrtl_cli_feedback;
 
 extern bool cli_output_active;
-enum cli_output_mode { all, load_side, extended, tune_pos, nn_pid, nn_inv };
+enum cli_output_mode { all, load_side, extended, tune_pos, nn_pid, nn_inv, nn_forw };
 
 #define N_MAX_ARGS 64
 

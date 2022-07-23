@@ -1,4 +1,4 @@
-#include <NN\NeuralNetwork.h>
+#include <NN/NeuralNetwork.h>>
 #include <cmath>
 #include <cstdlib>
 #include <stdint.h>
@@ -10,7 +10,7 @@ NeuralNetwork::NeuralNetwork(const int depth, int* width, nn_activation_f* f_act
     depth(depth), width(width), activation_function_per_layer(f_act_per_layer) {
 
     // add bias neurons to all except the output layer
-    for (int layer = 0; layer < depth - 1; layer++) {
+    for (int layer = 0; layer < depth - 2; layer++) {
         width[layer]++;
     }
 
@@ -31,7 +31,7 @@ NeuralNetwork::NeuralNetwork(const int depth, int* width, nn_activation_f* f_act
 
         for (int neuron = 0; neuron < width[layer]; neuron++) {
             // create no inputs to bias neurons
-            if ((layer != depth - 1) && (neuron == width[layer] - 1)) {
+            if ((layer != (depth - 1)) && (neuron == (width[layer] - 1))) {
                 continue;
             }
             else {
@@ -92,7 +92,7 @@ NeuralNetwork::NeuralNetwork(const int depth, int* width, nn_activation_f* f_act
 
 
             // set bias neurons to 1.0
-            if (neuron == width[layer] - 1 && layer != depth - 1) {
+            if ((neuron == (width[layer] - 1)) && (layer != (depth - 1))) {
                 neuron_outputs[layer][neuron] = 1.0;
             }
         }
@@ -113,6 +113,9 @@ NeuralNetwork::NeuralNetwork(const int depth, int* width, nn_activation_f* f_act
         barrier_loss[output_neuron_n].x = 0;
         barrier_loss[output_neuron_n].derivative = 0;
     }
+
+
+    targets = new float[width[depth - 1]];
 
     // Set standard values
     learning_rate = 0.001;
@@ -181,18 +184,21 @@ float* NeuralNetwork::get_output() {
     return neuron_outputs[depth - 1];
 }
 
-float NeuralNetwork::train_SGD(float inputs[], float targets[]) {
+float NeuralNetwork::train_SGD(float* inputs, float* targets) {
+
 
     set_input(inputs);
     propagate_forward();
+    this->targets = targets;
     float total_error = backpropagation(inputs, targets);
+
     apply_gradient_descent(update_rule);
 
     return total_error;
 
 }
 
-float NeuralNetwork::train_SGD(sample_t samples[], int n_samples) {
+float NeuralNetwork::train_SGD_S(sample_t samples[], int n_samples) {
 
     float last_error = 0;
     for (int i = 0; i < n_samples; i++) {
@@ -216,7 +222,7 @@ float NeuralNetwork::train_batch(batch_loss_t batch) {
         for (neuron = 0; neuron < width[layer]; neuron++) {
 
             // Handle Bias Neurons in all layers except the output layer
-            if (neuron == width[layer] - 1 && layer != depth - 1) {
+            if (neuron == (width[layer] - 1) && layer != (depth - 1)) {
 
             }
             else {
@@ -251,7 +257,7 @@ float NeuralNetwork::train_batch(batch_loss_t batch) {
         for (neuron = 0; neuron < width[layer]; neuron++) {
 
             // Handle Bias Neurons in all layers except the output layer
-            if (neuron == width[layer] - 1 && layer != depth - 1) {
+            if (neuron == (width[layer] - 1) && layer != (depth - 1)) {
 
             }
             else {
@@ -267,8 +273,6 @@ float NeuralNetwork::train_batch(batch_loss_t batch) {
     apply_gradient_descent(update_rule);
 
     backprop_batch_mode = false;
-
-    return total_error;
 }
 
 float NeuralNetwork::train_batch(batch_t batch) {
@@ -310,7 +314,7 @@ float NeuralNetwork::train_batch(batch_t batch) {
         for (neuron = 0; neuron < width[layer]; neuron++) {
 
             // Handle Bias Neurons in all layers except the output layer
-            if (neuron == width[layer] - 1 && layer != depth - 1) {
+            if ((neuron == (width[layer] - 1)) && (layer != (depth - 1))) {
 
             }
             else {
@@ -326,21 +330,6 @@ float NeuralNetwork::train_batch(batch_t batch) {
     apply_gradient_descent(update_rule);
 
     backprop_batch_mode = false;
-
-
-}
-
-float NeuralNetwork::train_SGD_ext_loss(float inputs[], float ext_loss, float ext_loss_derivative[]) {
-
-    set_input(inputs);
-    propagate_forward();
-
-
-    float total_error = backpropagation(inputs, ext_loss, ext_loss_derivative);
-
-    apply_gradient_descent(update_rule);
-
-    return total_error;
 
 
 }
@@ -372,7 +361,7 @@ void NeuralNetwork::propagate_forward() {
 #endif // NN_DEBUG
 
             // Handle Bias Neurons in all layers except the output layer
-            if (neuron == width[layer] - 1 && layer != depth - 1) {
+            if ((neuron == (width[layer] - 1)) && (layer != (depth - 1))) {
                 neuron_outputs[layer][neuron] = 1.0;
                 preact[layer][neuron] = 1.0;
             }
@@ -382,6 +371,7 @@ void NeuralNetwork::propagate_forward() {
 #ifdef NN_DEBUG
                     Serial.print("NN: Input: ");
                     Serial.println(input);
+                    Serial.println(neuron_outputs[layer - 1][input]);
 #endif // NN_DEBUG
 
 
@@ -398,19 +388,25 @@ void NeuralNetwork::propagate_forward() {
 
 }
 
-float NeuralNetwork::backpropagation(float inputs[], float targets[]) {
+float NeuralNetwork::backpropagation(float* inputs, float* targets) {
 
     float loss_sum = 0;
 
     float loss_derivatives[width[depth - 1]] = { 0 };
 
+
+
+
 #ifdef NN_DEBUG
     Serial.println("NN: Start Backpropagation loss calc: ");
+    Serial.print("N Outputs ");
+    Serial.println(width[depth - 1]);
 #endif // NN_DEBUG
 
 
     for (int output_neuron_n = 0; output_neuron_n < width[depth - 1]; output_neuron_n++) {
         //Calculate loss between the target and the output of the last layer
+
         float output_error = neuron_outputs[depth - 1][output_neuron_n] - targets[output_neuron_n];
         diff_fct_out loss = get_loss(output_error, loss_type);
 
@@ -419,8 +415,18 @@ float NeuralNetwork::backpropagation(float inputs[], float targets[]) {
 
 
 #ifdef NN_DEBUG
+        Serial.print("Output ");
+        Serial.println(neuron_outputs[depth - 1][output_neuron_n]);
+        Serial.print("Targets ");
+        Serial.println(targets[output_neuron_n]);
+
+
         Serial.print("Loss derivatives ");
         Serial.println(loss_derivatives[output_neuron_n]);
+        Serial.print("Error ");
+        Serial.print(output_neuron_n);
+        Serial.print(" ");
+        Serial.println(output_error);
 #endif // NN_DEBUG
 
 
@@ -447,7 +453,7 @@ float NeuralNetwork::backpropagation(float inputs[], float targets[]) {
 }
 
 
-float NeuralNetwork::backpropagation(float inputs[], float loss, float loss_derivatives[]) {
+float NeuralNetwork::backpropagation(float* inputs, float loss, float* loss_derivatives) {
 
     float total_error = loss;
 
@@ -497,7 +503,7 @@ float NeuralNetwork::backpropagation(float inputs[], float loss, float loss_deri
             for (connection = 0; connection < width[layer + 1]; connection++) {
 
 
-                if (connection == width[layer + 1] - 1 && layer + 1 != depth - 1) {
+                if ((connection == width[layer + 1] - 1) && ((layer + 1) != (depth - 1))) {
                     //skip since the neuron of the previous is a bias neuron, that has no connection to current layer
                     continue;
                 }
@@ -534,7 +540,7 @@ float NeuralNetwork::backpropagation(float inputs[], float loss, float loss_deri
             Serial.println(neuron);
 #endif // NN_DEBUG
 
-            if (neuron == width[layer] - 1 && layer != depth - 1) {
+            if (neuron == (width[layer] - 1) && (layer != (depth - 1))) {
                 continue;
             }
             for (connection = 0; connection < width[layer - 1]; connection++) {
@@ -600,9 +606,6 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
 #ifdef NN_DEBUG
     Serial.println("NN: Apply Gradient Descent");
 #endif // NN_DEBUG
-
-
-    apply_learning_rate_scheduler();
     float*** weight_gradients;
 
 
@@ -619,7 +622,7 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
         for (int neuron = 0; neuron < width[layer]; neuron++) {
             for (int connection = 0; connection < width[layer - 1]; connection++) {
 
-                if (!(neuron == width[layer] - 1 && layer != depth - 1)) { // bias neurons are not connected previous layers
+                if (!((neuron == width[layer] - 1) && (layer != depth - 1))) { // bias neurons are not connected previous layers
 
 
 
@@ -674,6 +677,7 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
         }
     }
 
+    apply_learning_rate_scheduler();
 
 
 }
@@ -681,6 +685,7 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
 float** NeuralNetwork::get_network_derivative(float* input_vector, bool finite_differerences) {
 
     // Finite differences:
+    float derivative[width[0]] = { 0.0 };
 
     if (finite_differerences) {
 
@@ -915,7 +920,7 @@ float NeuralNetwork::grad_leakyReLu(float x) {
         return 1.0;
     }
     else {
-        return 0.01 * x;
+        0.01 * x;
     }
 }
 
@@ -1072,15 +1077,9 @@ void NeuralNetwork::apply_learning_rate_scheduler() {
         }
     }
 
-    if (lr_schedule == error_adaptive) {
-        learning_rate = minimal_learning_rate + lr_error_factor * current_error;
-
-    }
-
 
 
 }
-
 
 
 void NeuralNetwork::printWeights() {

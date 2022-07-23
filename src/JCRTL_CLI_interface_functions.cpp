@@ -263,6 +263,11 @@ bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]) {
             cli_out_mode = nn_inv;
             return processed;
         }
+        if (strcmp(mode, "nn_forw") == 0) {
+            cli_output_active = true;
+            cli_out_mode = nn_forw;
+            return processed;
+        }
 
 
     }
@@ -337,6 +342,7 @@ bool jctrl_cli_process_nn_commands(char(*cli_arg)[N_MAX_ARGS]) {
 
             }
         }
+
 
 
 
@@ -483,6 +489,8 @@ void _jctrl_cli_output_periodic() {
             Serial.print("\t");
             Serial.print(targets.vel_target * RAD2DEG);
             Serial.print("\t");
+            Serial.print(targets.acc_target * RAD2DEG);
+            Serial.print("\t");
             Serial.println(targets.motor_torque_ff);
             return;
         }
@@ -556,13 +564,36 @@ void _jctrl_cli_output_periodic() {
     if (cli_out_mode == nn_inv) {
         drvSys_driveState state = drvSys_get_drive_state();
         float torque_pred = drvSys_inv_dyn_read_predicted_torque();
-        float error = drvSys_inv_dyn_nn_pred_error();
+        float error = drvSys_inv_dyn_nn_control_error();
+        float pid_torque = drvSys_get_pid_torque();
 
         Serial.print(state.motor_torque * 100);
         Serial.print("\t");
         Serial.print(torque_pred * 100);
         Serial.print("\t");
+        Serial.print(pid_torque * 100);
+        Serial.print("\t");
         Serial.println(error * 100);
+    }
+    if (cli_out_mode == nn_forw) {
+
+        drvSys_driveState state_pred = drvSys_get_forward_model_pred();
+
+        const drvSys_driveState actual_state = drvSys_get_drive_state();
+
+        Serial.print(state_pred.joint_pos * RAD2DEG);
+        Serial.print("\t");
+        Serial.print(state_pred.joint_vel * RAD2DEG);
+        Serial.print("\t");
+        Serial.print(state_pred.joint_acc * RAD2DEG);
+        Serial.print("\t");
+        Serial.print(actual_state.joint_pos * RAD2DEG);
+        Serial.print("\t");
+        Serial.print(actual_state.joint_vel * RAD2DEG);
+        Serial.print("\t");
+        Serial.println(actual_state.joint_acc * RAD2DEG);
+
+
     }
 
     if (cli_out_mode == nn_pid) {

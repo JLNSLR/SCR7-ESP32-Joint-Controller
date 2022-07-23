@@ -89,7 +89,7 @@ FOCController drvSys_foc_controller(&drvSys_magnetic_motor_encoder, &drvSys_driv
 // Torque Sensor TODO
 
 // Neural Network to learn inverse dynamics
-InverseDynamicsLearner* drvSys_nn_inverse_dynamics;
+InverseDynamicsLearner* drvSys_nn_dynamics_controller;
 unsigned int drvSys_max_learning_iterations_per_step = DRVSYS_MAX_LEARNING_ITERATION_PER_STEP;
 float drvSys_inv_dyn_pred_torque = 0.0;
 bool drvSys_inv_dyn_control_active = false;
@@ -138,19 +138,19 @@ float drvSys_vel_ff_gain = DRVSYS_VEL_FF_GAIN;
 
 /* --- Drive System Main State Variables --- */
 // Motor Kinematic State
-float drvSys_motor_position;
-float drvSys_motor_velocity;
-float drvSys_motor_acc;
-float drvSys_motor_position_prev;
-float drvSys_motor_velocity_prev;
-float drvSys_motor_acc_prev;
+float drvSys_motor_position = 0;
+float drvSys_motor_velocity = 0;
+float drvSys_motor_acc = 0;
+float drvSys_motor_position_prev = 0;
+float drvSys_motor_velocity_prev = 0;
+float drvSys_motor_acc_prev = 0;
 // Joint Kinematic State
-float drvSys_joint_position;
-float drvSys_joint_velocity;
-float drvSys_joint_acc;
-float drvSys_joint_position_prev;
-float drvSys_joint_velocity_prev;
-float drvSys_joint_acc_prev;
+float drvSys_joint_position = 0;
+float drvSys_joint_velocity = 0;
+float drvSys_joint_acc = 0;
+float drvSys_joint_position_prev = 0;
+float drvSys_joint_velocity_prev = 0;
+float drvSys_joint_acc_prev = 0;
 // Motor Torque 
 float drvSys_motor_torque_commanded = 0;
 float drvSys_motor_torque_command_prev = 0;
@@ -201,6 +201,9 @@ float _drvSys_torque_target = 0;
 
 // used to differentiate between torque_ff and reference torque for admittance control
 float drvSys_joint_torque_ref = 0.0;
+
+
+float drvSys_pid_torque = 0;
 
 
 /* ####### Drive System Preferences ########### */
@@ -290,8 +293,8 @@ const drvSys_FullDriveState drvSys_get_full_drive_state() {
 
 };
 
-const drvSys_FullDriveStateExt drvSys_get_extended_full_drive_state() {
-    const drvSys_FullDriveStateExt state_data;
+drvSys_FullDriveStateExt drvSys_get_extended_full_drive_state() {
+    drvSys_FullDriveStateExt state_data;
     state_data.state = drvSys_get_full_drive_state();
     state_data.state_prev.joint_acc = drvSys_joint_acc_prev;
     state_data.state_prev.joint_pos = drvSys_joint_position_prev;
@@ -300,6 +303,7 @@ const drvSys_FullDriveStateExt drvSys_get_extended_full_drive_state() {
     state_data.state_prev.motor_pos = drvSys_motor_position_prev;
     state_data.state_prev.motor_vel = drvSys_motor_velocity_prev;
     state_data.state_prev.motor_torque = drvSys_motor_torque_command_prev;
+    state_data.state_prev.joint_torque = drvSys_joint_torque_prev;
 
     return state_data;
 
@@ -818,12 +822,12 @@ void drvSys_initialize() {
 void _drvSys_inverse_dynamics_nn_setup() {
 
     Serial.println("DRVSYS_INFO: Setup NN for Inverse Dynamics");
-    drvSys_nn_inverse_dynamics = new InverseDynamicsLearner();
-    drvSys_nn_inverse_dynamics->init();
+    drvSys_nn_dynamics_controller = new InverseDynamicsLearner();
+    drvSys_nn_dynamics_controller->init();
     float max_joint_torque = drvSys_parameter_config.max_torque_Nm * DRVSYS_TRANSMISSION_RATIO;
     float max_vel = drvSys_parameter_config.max_vel;
     float max_motor_torque = drvSys_constants.motor_torque_constant;
-    drvSys_nn_inverse_dynamics->set_scale(max_motor_torque, max_vel, DRVSYS_ACC_MAX, max_joint_torque);
+    drvSys_nn_dynamics_controller->set_scale(max_motor_torque, max_vel, DRVSYS_ACC_MAX, max_joint_torque);
 
     nn_inv_initialized = true;
 
@@ -842,7 +846,14 @@ void _drvSys_inverse_dynamics_nn_setup() {
     Serial.println("DRVSYS_INFO: Finished NN Inverse Dynamics Setup");
 
 
-};
+}
+
+
+
+drvSys_driveState drvSys_get_forward_model_pred() {
+
+    return drvSys_nn_dynamics_controller->predict_joint_kinematic(drvSys_get_extended_full_drive_state());
+}
 
 void _drvSys_learn_dynamics_task(void* parameters) {
 
@@ -850,22 +861,36 @@ void _drvSys_learn_dynamics_task(void* parameters) {
 
     const TickType_t learning_delay = DRVSYS_LEARNING_PERIOD_MS / portTICK_PERIOD_MS;
 
+    const int learn_iterations = 10;
+
+    int forward_model_counter = 0;
+    int learning_counter = 0;
+
     while (true) {
+        counter++;
+        //Serial.println(counter);
+        if (learning_counter > 1000) {
+            drvSys_inv_dyn_control_active = false;
+        }
         if (nn_inv_initialized) {
 
-            drvSys_nn_inverse_dynamics->add_data(drvSys_get_full_drive_state());
+            drvSys_nn_dynamics_controller->add_data(drvSys_get_extended_full_drive_state(), drvSys_get_targets());
         }
-        if (counter % 50 == 0) {
-            for (int i = 0; i < 40; i++)
-                drvSys_nn_inverse_dynamics->learning_step();
+        if (counter % learn_iterations == 0) {
+            for (int i = 0; i < 1; i++) {
+
+                learning_counter++;
+                drvSys_nn_dynamics_controller->forward_dyn_learning_step();
+                //drvSys_nn_dynamics_controller->inverse_dyn_learning_step();
+                //Serial.println(drvSys_nn_dynamics_controller->control_error);
+                taskYIELD();
+
+
+            }
+
 
         }
 
-        counter++;
-
-        if (counter > 1000 * 1e3) {
-            drvSys_inv_dyn_control_active = true;
-        }
 
         //Serial.println(delta);
 
@@ -878,11 +903,11 @@ void drvSys_inv_dyn_nn_set_max_learning_iterations_per_step(unsigned int n_itera
 }
 
 void drvSys_inv_dyn_nn_set_learning_rate(float lr, float lr_error_scale) {
-    drvSys_nn_inverse_dynamics->nn->minimal_learning_rate = lr;
-    drvSys_nn_inverse_dynamics->nn->lr_error_factor = lr_error_scale;
+    drvSys_nn_dynamics_controller->nn->minimal_learning_rate = lr;
+    drvSys_nn_dynamics_controller->nn->lr_error_factor = lr_error_scale;
 }
 float drvSys_inv_dyn_nn_pred_error() {
-    return drvSys_nn_inverse_dynamics->nn->current_error;
+    return drvSys_nn_dynamics_controller->control_error;
 
 }
 
@@ -890,21 +915,20 @@ float drvSys_inv_dyn_read_predicted_torque() {
     return drvSys_inv_dyn_pred_torque;
 }
 
+float drvSys_get_pid_torque() {
+    return drvSys_pid_torque;
+}
 
-float _drvSys_inv_dyn_nn_predict_torque(bool target) {
+float drvSys_inv_dyn_nn_control_error() {
+    return drvSys_nn_dynamics_controller->control_error;
+}
+
+float _drvSys_inv_dyn_nn_predict_torque() {
 
     drvSys_FullDriveState state = drvSys_get_full_drive_state();
+    drvSys_driveTargets targets = drvSys_get_targets();
 
-    if (target) {
-
-        //Replace Joint Values with targets
-
-        state.joint_acc = drvSys_acc_target;
-        state.joint_pos = drvSys_pos_target;
-        state.joint_vel = drvSys_vel_target;
-    }
-
-    float predicted_torque = drvSys_nn_inverse_dynamics->predict_torque(state);
+    float predicted_torque = drvSys_nn_dynamics_controller->predict_torque(state, targets);
 
     return predicted_torque;
 }
@@ -1418,6 +1442,10 @@ void _drvSys_process_encoders_task(void* parameters) {
             drvSys_joint_position = joint_state.pos;
             xSemaphoreGive(drvSys_mutex_joint_position);
 
+
+            //handle joint torque 
+            drvSys_joint_torque_prev = drvSys_joint_torque;
+
         }
     }
 
@@ -1472,20 +1500,23 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
                 drvSys_position_controller.compute();
 
 
-                drvSys_inv_dyn_pred_torque = _drvSys_inv_dyn_nn_predict_torque(true);
+
                 float torque_ff = 0;
                 static float prev_torque_ff = 0;
                 if (drvSys_inv_dyn_control_active) {
+                    drvSys_inv_dyn_pred_torque = _drvSys_inv_dyn_nn_predict_torque();
                     torque_ff = drvSys_inv_dyn_pred_torque;
 
-                    torque_ff = torque_ff * 0.9 + (1.0 - 0.9) * prev_torque_ff;
+                    torque_ff = torque_ff * 0.95 + (1.0 - 0.95) * prev_torque_ff;
                     prev_torque_ff = torque_ff;
                 }
 
 
                 /* Handle controller output */
 
-                float motor_torque_target = drvSys_position_controller.output + drvSys_vel_target * drvSys_vel_ff_gain + torque_ff;
+                drvSys_pid_torque = drvSys_position_controller.output + drvSys_vel_target * drvSys_vel_ff_gain;
+
+                float motor_torque_target = drvSys_pid_torque + torque_ff;
 
                 _drvSys_set_target_torque(motor_torque_target);
 
