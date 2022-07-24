@@ -1,0 +1,115 @@
+#ifndef NEURAL_CONTROLLER_H
+#define NEURAL_CONTROLLER_H
+#include <NN/NeuralNetwork.h>
+#include <NN/nn_utils.h>
+#include <drive_system_types.h>
+#include <Arduino.h>
+#include <CircularBuffer.h>
+
+
+#define BUFFERSIZE 10
+
+//#define NN_CONTROL_DEBUG
+
+union emulator_sample {
+    struct {
+        float joint_pos;
+        float joint_vel;
+        float joint_acc;
+        float motor_pos;
+        float motor_vel;
+        float motor_acc;
+        float motor_torque;
+        float joint_torque;
+
+        float joint_pos_next;
+        float joint_vel_next;
+        float joint_acc_next;
+    }data;
+    float inputs[8];
+    float outputs[3];
+};
+
+union inverse_dyn_control_sample {
+    struct {
+        float joint_pos;
+        float joint_vel;
+        float joint_acc;
+        float motor_pos;
+        float motor_vel;
+        float motor_acc;
+        float joint_torque;
+
+        float joint_pos_target;
+        float joint_vel_target;
+        float joint_acc_target;
+
+        float control_error;
+        float control_error_derivative;
+
+    }data;
+    float inputs[10];
+};
+struct full_neural_control_sample {
+    drvSys_FullDriveStateTimeSample state_sample;
+    drvSys_driveTargets target_sample;
+};
+
+class NeuralController {
+
+public:
+    NeuralController();
+    void init();
+    void add_sample(drvSys_FullDriveStateTimeSample sample, drvSys_driveTargets targets);
+    void learning_step_emulator();
+    drvSys_driveState emulator_predict_next_state(drvSys_FullDriveState current_state);
+
+    float predict_control_torque(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
+    void learning_step_controller();
+
+    void save_emulator_network();
+    void save_controller_network();
+    NeuralNetwork* emulator_nn;
+    NeuralNetwork* controller_nn;
+    float emulator_error = 0;
+    float average_emulator_error = 0;
+
+    float average_control_error = 0;
+    float control_error = 0;
+
+
+    NeuralNetwork* inverse_dynamic_control_nn;
+
+
+
+private:
+
+    long emulator_counter = 0;
+    static const int emulator_depth = 4;
+    int emulator_width[emulator_depth] = { 8,8,5,3 };
+    nn_activation_f emulator_act[emulator_depth - 1] = { leakyReLu,leakyReLu,Linear };
+
+    CircularBuffer<full_neural_control_sample, BUFFERSIZE> training_buffer;
+
+    emulator_sample get_emulator_sample(drvSys_FullDriveStateTimeSample data);
+
+    SemaphoreHandle_t mutex_training_buffer;
+    SemaphoreHandle_t mutex_emulator;
+    SemaphoreHandle_t mutex_controller;
+
+    char emulator_name[7] = "emu_nn";
+    char controller_name[9] = "contr_nn";
+
+    static const int controller_depth = 4;
+    int controller_width[controller_depth] = { 10,8,6,1 };
+    nn_activation_f controller_act[controller_depth - 1] = { leakyReLu,leakyReLu,Linear };
+
+
+
+
+
+};
+
+
+
+#endif // NEURAL_CONTROLLER

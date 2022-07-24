@@ -98,8 +98,8 @@
 #define DRVSYS_POS_LIMIT_HIGH 180.0*DEG2RAD
 #define DRVSYS_POS_LIMIT_LOW -180.0*DEG2RAD
 
-#define DRVSYS_VEL_MAX 200.0*DEG2RAD // deg/s
-#define DRVSYS_ACC_MAX 4000.0*DEG2RAD//deg/s^
+#define DRVSYS_VEL_MAX 30.0*DEG2RAD // deg/s
+#define DRVSYS_ACC_MAX 100.0*DEG2RAD//deg/s^
 
 
 // Origin Location relative to Hall Sensor Locaion 

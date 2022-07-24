@@ -53,7 +53,7 @@ struct drvSys_FullDriveState {
     float motor_acc;
 };
 
-struct drvSys_FullDriveStateExt {
+struct drvSys_FullDriveStateTimeSample {
     drvSys_FullDriveState state;
     drvSys_FullDriveState state_prev;
 };

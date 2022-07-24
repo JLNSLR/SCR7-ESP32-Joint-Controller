@@ -1,4 +1,4 @@
-#include <NN/NeuralNetwork.h>>
+#include <NN/NeuralNetwork.h>
 #include <cmath>
 #include <cstdlib>
 #include <stdint.h>
@@ -198,6 +198,18 @@ float NeuralNetwork::train_SGD(float* inputs, float* targets) {
 
 }
 
+float NeuralNetwork::train_SGD_ext_loss(float* inputs, float ext_loss, float* ext_loss_derivative) {
+
+    set_input(inputs);
+    propagate_forward();
+
+    float total_error = backpropagation(inputs, ext_loss, ext_loss_derivative);
+
+    apply_gradient_descent(update_rule);
+
+    return total_error;
+}
+
 float NeuralNetwork::train_SGD_S(sample_t samples[], int n_samples) {
 
     float last_error = 0;
@@ -211,7 +223,6 @@ float NeuralNetwork::train_SGD_S(sample_t samples[], int n_samples) {
 }
 
 float NeuralNetwork::train_batch(batch_loss_t batch) {
-    float*** weights_grad_batch;
 
     backprop_batch_mode = true;
 
@@ -251,7 +262,6 @@ float NeuralNetwork::train_batch(batch_loss_t batch) {
 
         total_error += backpropagation(inputs, loss, loss_derivatives);
 
-        int layer, neuron, input;
     }
     for (layer = 1; layer < depth; layer++) {
         for (neuron = 0; neuron < width[layer]; neuron++) {
@@ -273,10 +283,11 @@ float NeuralNetwork::train_batch(batch_loss_t batch) {
     apply_gradient_descent(update_rule);
 
     backprop_batch_mode = false;
+
+    return total_error;
 }
 
 float NeuralNetwork::train_batch(batch_t batch) {
-    float*** weights_grad_batch;
 
     backprop_batch_mode = true;
 
@@ -308,7 +319,6 @@ float NeuralNetwork::train_batch(batch_t batch) {
         //backpropagate for each sample
         total_error += backpropagation(batch.samples[s].inputs, batch.samples[s].outputs);
 
-        int layer, neuron, input;
     }
     for (layer = 1; layer < depth; layer++) {
         for (neuron = 0; neuron < width[layer]; neuron++) {
@@ -331,6 +341,7 @@ float NeuralNetwork::train_batch(batch_t batch) {
 
     backprop_batch_mode = false;
 
+    return total_error;
 
 }
 
@@ -346,7 +357,7 @@ void NeuralNetwork::propagate_forward() {
     Serial.println("Start forward propagation");
 #endif // NN_DEBUG
 
-    for (int layer = 1; layer < depth; layer++) {
+    for (layer = 1; layer < depth; layer++) {
 #ifdef NN_DEBUG
         Serial.print("NN: Layer: ");
         Serial.println(layer);
@@ -394,7 +405,7 @@ float NeuralNetwork::backpropagation(float* inputs, float* targets) {
 
     float loss_derivatives[width[depth - 1]] = { 0 };
 
-
+    float total_output_error = 0;
 
 
 #ifdef NN_DEBUG
@@ -431,6 +442,7 @@ float NeuralNetwork::backpropagation(float* inputs, float* targets) {
 
 
         loss_sum += loss.x;
+        total_output_error += output_error;
 
     }
 
@@ -447,7 +459,7 @@ float NeuralNetwork::backpropagation(float* inputs, float* targets) {
 #endif // NN_DEBUG
     backpropagation(inputs, loss_sum, loss_derivatives);
 
-    return loss_sum;
+    return total_output_error;
 
 
 }
@@ -472,8 +484,12 @@ float NeuralNetwork::backpropagation(float* inputs, float loss, float* loss_deri
 
     for (int output_neuron_n = 0; output_neuron_n < width[depth - 1]; output_neuron_n++) {
         //Calculate loss between the target and the output of the last layer
+        float barrier_loss_grad = 0;
+        if (output_barriers) {
+            barrier_loss->derivative;
+        }
         float loss_y = loss_derivatives[output_neuron_n];
-        neuron_loss[depth - 1][output_neuron_n] = clip_gradient(loss_y + barrier_loss[output_neuron_n].derivative);
+        neuron_loss[depth - 1][output_neuron_n] = clip_gradient(loss_y + barrier_loss_grad);
 
 
 #ifdef NN_DEBUG
@@ -606,8 +622,8 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
 #ifdef NN_DEBUG
     Serial.println("NN: Apply Gradient Descent");
 #endif // NN_DEBUG
-    float*** weight_gradients;
 
+    apply_learning_rate_scheduler();
 
     static float beta_1_raised = 1.0;
     static float beta_2_raised = 1.0;
@@ -677,7 +693,7 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
         }
     }
 
-    apply_learning_rate_scheduler();
+
 
 
 }
@@ -685,7 +701,6 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
 float** NeuralNetwork::get_network_derivative(float* input_vector, bool finite_differerences) {
 
     // Finite differences:
-    float derivative[width[0]] = { 0.0 };
 
     if (finite_differerences) {
 
@@ -866,6 +881,7 @@ float NeuralNetwork::apply_activation_function(float x, int layer) {
     if (function_type == leakyReLu) {
         return f_leakyReLu(x);
     }
+    return x;
 }
 
 float NeuralNetwork::grad_activation_function(float x, int layer) {
@@ -881,6 +897,8 @@ float NeuralNetwork::grad_activation_function(float x, int layer) {
     if (function_type == leakyReLu) {
         return grad_leakyReLu(x);
     }
+
+    return 1.0;
 }
 
 
@@ -920,7 +938,7 @@ float NeuralNetwork::grad_leakyReLu(float x) {
         return 1.0;
     }
     else {
-        0.01 * x;
+        return 0.01 * x;
     }
 }
 
@@ -1075,6 +1093,14 @@ void NeuralNetwork::apply_learning_rate_scheduler() {
         if (cosine_decay) {
             learning_rate = learning_rate / (1 + decay_factor * n_iterations);
         }
+    }
+    if (lr_schedule == error_adaptive) {
+
+        learning_rate = minimal_learning_rate + lr_error_factor * current_error;
+    }
+    if (lr_schedule == error_adaptive_filtered) {
+
+        learning_rate = minimal_learning_rate + lr_error_factor * filtered_error;
     }
 
 

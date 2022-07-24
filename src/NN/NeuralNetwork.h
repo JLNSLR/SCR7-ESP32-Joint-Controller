@@ -10,7 +10,7 @@ enum nn_loss_function { MSE, MAE, huber_loss };
 
 enum nn_regularization { none, ridge, lasso };
 
-enum nn_learning_rate_schedule { no_schedule, time_decay, cosine_annealing, error_adaptive };
+enum nn_learning_rate_schedule { no_schedule, time_decay, cosine_annealing, error_adaptive, error_adaptive_filtered };
 
 struct sample_t {
     float* inputs;
@@ -49,7 +49,7 @@ enum grad_descent_update_rule { sgd, adam };
 class NeuralNetwork {
 public:
 
-    NeuralNetwork(int depth, int width[], nn_activation_f f_act_per_layer[]);
+    NeuralNetwork(const int depth, int width[], nn_activation_f f_act_per_layer[]);
     ~NeuralNetwork();
     void propagate_forward();
     float train_SGD(float* inputs, float* targets);
