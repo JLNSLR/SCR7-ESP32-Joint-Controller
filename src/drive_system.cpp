@@ -858,11 +858,8 @@ drvSys_driveState drvSys_get_emulator_pred() {
 void _drvSys_learn_neural_control_task(void* parameters) {
 
     static long counter = 0;
-
     const TickType_t learning_delay = DRVSYS_LEARNING_PERIOD_MS / portTICK_PERIOD_MS;
-
     const int learn_iterations = 10;
-
     int learning_counter = 0;
 
     while (true) {
@@ -872,8 +869,8 @@ void _drvSys_learn_neural_control_task(void* parameters) {
             nn_inv_initialized = true;
         }
 
-        if (learning_counter > 1000) {
-            drvSys_inv_dyn_control_active = false;
+        if (learning_counter > 5000) {
+            drvSys_inv_dyn_control_active = true;
         }
         if (nn_inv_initialized) {
             neural_controller->add_sample(drvSys_get_full_drive_state_time_samples(), drvSys_get_targets());
@@ -885,8 +882,6 @@ void _drvSys_learn_neural_control_task(void* parameters) {
 
                 neural_controller->learning_step_controller();
                 learning_counter++;
-                //drvSys_nn_dynamics_controller->inverse_dyn_learning_step();
-                //Serial.println(drvSys_nn_dynamics_controller->control_error);
                 taskYIELD();
 
 
@@ -906,7 +901,7 @@ void drvSys_inv_dyn_nn_set_max_learning_iterations_per_step(unsigned int n_itera
     drvSys_max_learning_iterations_per_step = n_iterations;
 }
 
-void drvSys_inv_dyn_nn_set_learning_rate(float lr, float lr_error_scale) {
+void drvSys_neural_control_set_learning_rate(float lr, float lr_error_scale) {
 
 }
 float drvSys_inv_dyn_nn_pred_error() {
@@ -922,21 +917,21 @@ float drvSys_get_pid_torque() {
     return drvSys_pid_torque;
 }
 
-float drvSys_inv_dyn_nn_control_error() {
-    return 0;
+float drvSys_neural_control_error() {
+    return neural_controller->control_error;
 }
 
-float _drvSys_inv_dyn_nn_predict_torque() {
+float _drvSys_neural_control_predict_torque() {
 
     drvSys_FullDriveState state = drvSys_get_full_drive_state();
     drvSys_driveTargets targets = drvSys_get_targets();
 
-    float predicted_torque = 0;
+    float predicted_torque = neural_controller->predict_control_torque(state, targets);
 
     return predicted_torque;
 }
 
-void drvSys_inv_dyn_nn_activate_control(bool active) {
+void drvSys_neural_control_activate(bool active) {
 
     drvSys_inv_dyn_control_active = active;
 }
@@ -1504,7 +1499,7 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
                 float torque_ff = 0;
                 static float prev_torque_ff = 0;
                 if (drvSys_inv_dyn_control_active) {
-                    drvSys_inv_dyn_pred_torque = _drvSys_inv_dyn_nn_predict_torque();
+                    drvSys_inv_dyn_pred_torque = _drvSys_neural_control_predict_torque();
                     torque_ff = drvSys_inv_dyn_pred_torque;
 
                     torque_ff = torque_ff * 0.95 + (1.0 - 0.95) * prev_torque_ff;

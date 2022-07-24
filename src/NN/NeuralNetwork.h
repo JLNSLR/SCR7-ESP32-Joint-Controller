@@ -75,6 +75,7 @@ public:
      * @return float** Jacobian matrix n*i n - outputs, i - inputs[output_n][input_i]
      */
     float** get_network_derivative(float* input_vector, bool finite_differences = true);
+    void apply_gradient_descent(grad_descent_update_rule update_method = adam);
 
     nn_model_weights get_model_weights();
     void load_model_weights(nn_model_weights weights_data);
@@ -159,7 +160,7 @@ private:
     // Core Functions for Training
     float apply_activation_function(float x, int layer);
     float grad_activation_function(float x, int layer);
-    void apply_gradient_descent(grad_descent_update_rule update_method = adam);
+
     diff_fct_out get_loss(float x, nn_loss_function loss_type);
     float clip_gradient(float input_grad);
 

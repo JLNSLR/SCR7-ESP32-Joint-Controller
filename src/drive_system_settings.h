@@ -132,10 +132,19 @@
 #define DRVSYS_POS_PID_FILTER_DERIVATIVE_ALPHA 0.15 // corresponds to ~ 500 Hz aka 2ms Time Constant alpha = (1-exp(-T/tau))
 #define DRVSYS_POS_PID_MEASURE_ON_DERIVATIVE 0
 
+
 #define PID_GAIN_P 0.75
 #define PID_GAIN_I 10
 #define PID_GAIN_D 0.05
 #define PID_VEL_FF 0.01
+
+
+/*
+#define PID_GAIN_P 0.3
+#define PID_GAIN_I 0
+#define PID_GAIN_D 0.0
+#define PID_VEL_FF 0.0
+*/
 
 // Additional Info
 //...

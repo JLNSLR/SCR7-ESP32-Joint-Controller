@@ -85,7 +85,7 @@ void _motion_sequencer_task(void* parameters) {
 
     static long last_time_us = 0;
 
-
+    static long counter = 0;
 
     while (true) {
 
@@ -113,6 +113,29 @@ void _motion_sequencer_task(void* parameters) {
 
             drvSys_set_target(target);
         }
+
+        counter++;
+
+        if (test_signal_active) {
+            if (counter % 600 == 0) {
+
+                if (!motion_planner.executing_traj_flag) {
+                    target = (float(rand()) / float(RAND_MAX)) * 175;
+                    if (counter % 5 == 0) {
+                        dir = -dir;
+                    }
+                    vel = (float(rand()) / float(RAND_MAX)) * 60.0;
+                    acc = (float(rand()) / float(RAND_MAX)) * 1000.0;
+
+                    handle_motion_command(target * DEG2RAD * dir, vel * DEG2RAD, acc * DEG2RAD);
+                }
+
+
+            }
+        }
+
+
+
         vTaskDelay(motion_delay);
 
 

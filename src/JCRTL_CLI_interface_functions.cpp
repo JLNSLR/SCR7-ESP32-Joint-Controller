@@ -314,13 +314,13 @@ bool jctrl_cli_process_nn_commands(char(*cli_arg)[N_MAX_ARGS]) {
         if (strcmp(type, "inv") == 0) {
             if (strcmp(command, "lr") == 0) {
 
-                drvSys_inv_dyn_nn_set_learning_rate(value_1, value_2);
+                drvSys_neural_control_set_learning_rate(value_1, value_2);
             }
             if (strcmp(command, "start") == 0) {
-                drvSys_inv_dyn_nn_activate_control(true);
+                drvSys_neural_control_activate(true);
             }
             if (strcmp(command, "stop") == 0) {
-                drvSys_inv_dyn_nn_activate_control(false);
+                drvSys_neural_control_activate(false);
             }
             if (strcmp(command, "s") == 0) {
 
@@ -562,11 +562,11 @@ void _jctrl_cli_output_periodic() {
 
     }
     if (cli_out_mode == nn_inv) {
-        /*
+        
         drvSys_driveState state = drvSys_get_drive_state();
         float torque_pred = drvSys_inv_dyn_read_predicted_torque();
-        float error = drvSys_inv_dyn_nn_control_error();
-        //float pid_torque = drvSys_get_pid_torque();
+        float error = drvSys_neural_control_error();
+        float pid_torque = drvSys_get_pid_torque();
 
         Serial.print(state.motor_torque * 100);
         Serial.print("\t");
@@ -575,10 +575,9 @@ void _jctrl_cli_output_periodic() {
         Serial.print(pid_torque * 100);
         Serial.print("\t");
         Serial.println(error * 100);
-        */
     }
     if (cli_out_mode == nn_em) {
-        
+
         drvSys_driveState state_pred = drvSys_get_emulator_pred();
 
         const drvSys_driveState actual_state = drvSys_get_drive_state();

@@ -207,12 +207,14 @@ void _drvSys_align_axis();
 
 void _drvSys_neural_controller_setup();
 void _drvSys_learn_neural_control_task(void* parameters);
-void drvSys_inv_dyn_nn_activate_control(bool active);
-void drvSys_inv_dyn_nn_set_learning_rate(float lr, float lr_error_scale);
-float drvSys_inv_dyn_nn_control_error();
-float _drvSys_inv_dyn_nn_predict_torque();
+void drvSys_neural_control_activate(bool active);
+void drvSys_neural_control_set_learning_rate(float lr, float lr_error_scale);
+float drvSys_neural_control_error();
+float _drvSys_neural_control_predict_torque();
 float drvSys_inv_dyn_read_predicted_torque();
 drvSys_driveState drvSys_get_emulator_pred();
+
+float drvSys_get_pid_torque();
 
 
 // Neural Network PID Tuner 
