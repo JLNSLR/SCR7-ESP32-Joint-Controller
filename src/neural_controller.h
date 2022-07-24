@@ -5,9 +5,11 @@
 #include <drive_system_types.h>
 #include <Arduino.h>
 #include <CircularBuffer.h>
+#include <drive_system_settings.h>
 
 
 #define BUFFERSIZE 10
+
 
 //#define NN_CONTROL_DEBUG
 
@@ -55,6 +57,14 @@ struct full_neural_control_sample {
     drvSys_driveTargets target_sample;
 };
 
+struct pid_tune_sample {
+    drvSys_FullDriveState state;
+    drvSys_driveTargets;
+    float error;
+    float error_sum;
+    float dError;
+};
+
 class NeuralController {
 
 public:
@@ -86,7 +96,7 @@ private:
 
     long emulator_counter = 0;
     static const int emulator_depth = 4;
-    int emulator_width[emulator_depth] = { 8,8,5,3 };
+    int emulator_width[emulator_depth] = { 8,12,5,3 };
     nn_activation_f emulator_act[emulator_depth - 1] = { leakyReLu,leakyReLu,Linear };
 
     CircularBuffer<full_neural_control_sample, BUFFERSIZE> training_buffer;
@@ -101,8 +111,25 @@ private:
     char controller_name[9] = "contr_nn";
 
     static const int controller_depth = 4;
-    int controller_width[controller_depth] = { 10,8,6,1 };
+    int controller_width[controller_depth] = { 10,12,6,1 };
     nn_activation_f controller_act[controller_depth - 1] = { leakyReLu,leakyReLu,Linear };
+
+
+    const float max_angle = 180.0 * DEG2RAD;
+    const float inv_max_angle = 1.0 / max_angle;
+    const float max_vel = 180.0 * DEG2RAD;
+    const float inv_max_vel = 1.0 / max_vel;
+    const float max_acc = 1000 * DEG2RAD;
+    const float inv_max_acc = 1.0 / max_acc;
+    const float max_motor_torque = DRVSYS_TORQUE_CONSTANT;
+    const float inv_max_motor_torque = 1.0 / max_motor_torque;
+    const float max_joint_torque = 100;
+    const float inv_max_joint_torque = 1 / max_joint_torque;
+
+    // PID Tuner
+
+    CircularBuffer<pid_tune_sample, 5> tuning_buffer;
+
 
 
 
