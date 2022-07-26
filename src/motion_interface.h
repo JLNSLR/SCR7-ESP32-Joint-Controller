@@ -18,8 +18,6 @@ extern MotionPlanner motion_planner;
 
 enum motion_control_mode { position, trajectory };
 
-bool test_signal_active = false;
-
 void start_motion_interface();
 
 void handle_motion_command(float target_pos, float travel_vel = 0, float travel_acc = 0);

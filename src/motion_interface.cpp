@@ -17,6 +17,7 @@ CircularBuffer<drvSys_driveTargets, 10> trajectory_command_buffer;
 
 bool no_commands_given = true;
 
+bool test_signal_active = false;
 
 void start_motion_interface() {
 
@@ -115,16 +116,19 @@ void _motion_sequencer_task(void* parameters) {
         }
 
         counter++;
-
+        /*
         if (test_signal_active) {
             if (counter % 600 == 0) {
 
+                float dir = 1.0;
+                float target = 0;
+                float acc = 0;
                 if (!motion_planner.executing_traj_flag) {
                     target = (float(rand()) / float(RAND_MAX)) * 175;
                     if (counter % 5 == 0) {
                         dir = -dir;
                     }
-                    vel = (float(rand()) / float(RAND_MAX)) * 60.0;
+                    float vel = (float(rand()) / float(RAND_MAX)) * 60.0;
                     acc = (float(rand()) / float(RAND_MAX)) * 1000.0;
 
                     handle_motion_command(target * DEG2RAD * dir, vel * DEG2RAD, acc * DEG2RAD);
@@ -132,7 +136,7 @@ void _motion_sequencer_task(void* parameters) {
 
 
             }
-        }
+    }*/
 
 
 

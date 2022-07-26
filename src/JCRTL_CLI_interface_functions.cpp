@@ -268,6 +268,11 @@ bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]) {
             cli_out_mode = nn_em;
             return processed;
         }
+        if (strcmp(mode, "nn_pid") == 0) {
+            cli_output_active = true;
+            cli_out_mode = nn_pid;
+            return processed;
+        }
 
 
     }
@@ -562,7 +567,7 @@ void _jctrl_cli_output_periodic() {
 
     }
     if (cli_out_mode == nn_inv) {
-        
+
         drvSys_driveState state = drvSys_get_drive_state();
         float torque_pred = drvSys_inv_dyn_read_predicted_torque();
         float error = drvSys_neural_control_error();
@@ -599,7 +604,7 @@ void _jctrl_cli_output_periodic() {
 
     if (cli_out_mode == nn_pid) {
         drvSys_driveState state = drvSys_get_drive_state();
-        drvSys_driveTargets targets = drvSys_driveTargets();
+        drvSys_driveTargets targets = drvSys_get_targets();
 
         drvSys_PID_Gains gains = drvSys_get_parameters().pid_gains;
 
@@ -609,7 +614,8 @@ void _jctrl_cli_output_periodic() {
         Serial.print("\t");
         Serial.print(targets.pos_target * RAD2DEG);
         Serial.print("\t");
-        Serial.println(targets.vel_target * RAD2DEG);
+        Serial.print(targets.vel_target * RAD2DEG);
+        Serial.print("\t");
         Serial.print(gains.K_p);
         Serial.print("\t");
         Serial.print(gains.K_i);

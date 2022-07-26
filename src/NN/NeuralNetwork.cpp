@@ -657,7 +657,7 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
 
                         if (abs(weights_grad[layer][neuron][connection]) > __FLT_MAX__) {
                             weights_grad[layer][neuron][connection] = 0.01 * weights_grad[layer][neuron][connection];
-                        }
+                    }
 #endif // NN_DEBUG
 
                         weights[layer][neuron][connection] -= learning_rate * weights_grad[layer][neuron][connection];
@@ -665,7 +665,7 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
                         Serial.print(" After:");
                         Serial.println(weights[layer][neuron][connection]);
 #endif
-                    }
+                }
 
                     else if (update_method == adam) {
                         adam_m[layer][neuron][connection] = beta_1 * adam_m[layer][neuron][connection] + (1 - beta_1) * weights_grad[layer][neuron][connection];
@@ -687,11 +687,11 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
                         weights[layer][neuron][connection] -= learning_rate * weight_update;
                     }
 
-                }
-
             }
+
         }
     }
+}
 
 
 

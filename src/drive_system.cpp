@@ -95,7 +95,7 @@ float drvSys_inv_dyn_pred_torque = 0.0;
 bool drvSys_inv_dyn_control_active = false;
 
 //Neural Network to learn PID Parameters
-bool drvSys_pid_tuner_active = DRVSYS_PID_GAIN_LEARNING_ACTIVE;
+bool drvSys_pid_tuner_active = false;
 
 // Axis alignment Variables
 
@@ -156,6 +156,10 @@ float drvSys_motor_torque_command_prev = 0;
 // Joint Torque Sensor Value
 float drvSys_joint_torque = 0.0;
 float drvSys_joint_torque_prev = 0;
+
+float drvSys_pid_sample_error = 0;
+float drvSys_pid_sample_Iterm = 0;
+float drvSys_pid_sample_dError = 0;
 
 
 // Peripheral Sensor Values
@@ -823,12 +827,13 @@ void drvSys_initialize() {
 void _drvSys_neural_controller_setup() {
 
     Serial.println("DRVSYS_INFO: Setup NN for Inverse Dynamics");
-    float max_joint_torque = drvSys_parameter_config.max_torque_Nm * DRVSYS_TRANSMISSION_RATIO;
-    float max_vel = drvSys_parameter_config.max_vel;
-    float max_motor_torque = drvSys_constants.motor_torque_constant;
 
     neural_controller = new NeuralController();
     neural_controller->init();
+
+
+    nn_pid_initialized = true;
+    drvSys_pid_tuner_active = false;
 
     /* --- create Task --- */
     xTaskCreatePinnedToCore(
@@ -869,19 +874,29 @@ void _drvSys_learn_neural_control_task(void* parameters) {
             nn_inv_initialized = true;
         }
 
-        if (learning_counter > 5000) {
-            drvSys_inv_dyn_control_active = true;
+        if (learning_counter > 10000) {
+            drvSys_inv_dyn_control_active = false;
         }
-        if (nn_inv_initialized) {
-            neural_controller->add_sample(drvSys_get_full_drive_state_time_samples(), drvSys_get_targets());
 
+
+        if (learning_counter > 10000) {
+            drvSys_pid_tuner_active = true;
         }
+
+
+        drvSys_FullDriveStateTimeSample sample_data = drvSys_get_full_drive_state_time_samples();
+        drvSys_driveTargets targets = drvSys_get_targets();
+        neural_controller->add_sample(sample_data, targets);
+
+        neural_controller->add_pid_sample(sample_data.state, targets, drvSys_pid_sample_error, drvSys_pid_sample_Iterm, drvSys_pid_sample_dError);
+
+
         if (counter % learn_iterations == 0) {
             for (int i = 0; i < 10; i++) {
                 neural_controller->learning_step_emulator();
-
                 neural_controller->learning_step_controller();
                 learning_counter++;
+                neural_controller->learning_step_pid_tuner();
                 taskYIELD();
 
 
@@ -890,8 +905,18 @@ void _drvSys_learn_neural_control_task(void* parameters) {
 
         }
 
+        // Obtain Optimal Gains from NN
+        if (drvSys_pid_tuner_active && counter % 1 == 0) {
+            //Serial.println("new gains");
+            drvSys_PID_Gains gains = neural_controller->predict_optimal_gains(drvSys_get_full_drive_state(), drvSys_get_targets());
 
-        //Serial.println(delta);
+
+
+            drvSys_update_PID_gains(gains);
+        }
+        //
+
+//Serial.println(delta);
 
         vTaskDelay(learning_delay);
     }
@@ -1474,12 +1499,6 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
 
             if (drvSys_mode == closed_loop_foc || drvSys_mode == admittance_control) {
 
-                // Obtain Optimal Gains from NN
-                if (drvSys_pid_tuner_active) {
-                    //drvSys_PID_Gains gains = drvSys_pid_tune_nn->predictOptimalGains(drvSys_get_full_drive_state(), drvSys_get_targets());
-                    //drvSys_update_PID_gains(gains);
-                }
-                //
 
                 xSemaphoreTake(drvSys_mutex_joint_position, portMAX_DELAY);
                 float actual_pos_joint = drvSys_joint_position;
@@ -1493,7 +1512,6 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
 
                 drvSys_position_controller.input = actual_pos_joint;
                 drvSys_position_controller.compute();
-
 
 
                 float torque_ff = 0;
@@ -1514,6 +1532,13 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
                 float motor_torque_target = drvSys_pid_torque + torque_ff;
 
                 _drvSys_set_target_torque(motor_torque_target);
+
+                if (nn_pid_initialized) {
+                    drvSys_pid_sample_error = drvSys_pid_sample_error;
+                    drvSys_pid_sample_Iterm = drvSys_pid_sample_Iterm;
+                    drvSys_pid_sample_dError = drvSys_pid_sample_dError;
+                }
+
 
 
             }
@@ -1679,16 +1704,21 @@ void _drvSys_monitor_system_task(void* parameters) {
 
 void drvSys_update_PID_gains(drvSys_PID_Gains gains) {
 
+    drvSys_PID_Gains new_gains;
+
     // Write them to overall Drive System parameters
-    drvSys_parameter_config.pid_gains.K_p = gains.K_p;
-    drvSys_parameter_config.pid_gains.K_i = gains.K_i;
-    drvSys_parameter_config.pid_gains.K_d = gains.K_d;
-    drvSys_parameter_config.pid_gains.K_vel_ff = gains.K_vel_ff;
+
+    // Filter gain changes
+    new_gains.K_p = abs(drvSys_parameter_config.pid_gains.K_p * 0.5 + 0.5 * gains.K_p);
+    new_gains.K_i = abs(drvSys_parameter_config.pid_gains.K_i * 0.5 + 0.5 * gains.K_i);
+    new_gains.K_d = abs(drvSys_parameter_config.pid_gains.K_d * 0.5 + 0.5 * gains.K_d);
+
+    drvSys_parameter_config.pid_gains = new_gains;
 
     drvSys_vel_ff_gain = gains.K_vel_ff;
 
     // Write them to controller instance
-    drvSys_position_controller.setTuning(gains.K_p, gains.K_i, gains.K_d);
+    drvSys_position_controller.setTuning(new_gains.K_p, new_gains.K_i, new_gains.K_d);
 
 }
 

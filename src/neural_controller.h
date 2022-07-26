@@ -1,11 +1,14 @@
 #ifndef NEURAL_CONTROLLER_H
 #define NEURAL_CONTROLLER_H
+
+
 #include <NN/NeuralNetwork.h>
 #include <NN/nn_utils.h>
 #include <drive_system_types.h>
 #include <Arduino.h>
 #include <CircularBuffer.h>
 #include <drive_system_settings.h>
+#include <drive_system.h>
 
 
 #define BUFFERSIZE 10
@@ -59,7 +62,7 @@ struct full_neural_control_sample {
 
 struct pid_tune_sample {
     drvSys_FullDriveState state;
-    drvSys_driveTargets;
+    drvSys_driveTargets targets;
     float error;
     float error_sum;
     float dError;
@@ -74,21 +77,36 @@ public:
     void learning_step_emulator();
     drvSys_driveState emulator_predict_next_state(drvSys_FullDriveState current_state);
 
+    void add_pid_sample(drvSys_FullDriveState state, drvSys_driveTargets target, float error, float Iterm, float dError);
+
     float predict_control_torque(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
     void learning_step_controller();
 
     void save_emulator_network();
     void save_controller_network();
+    void save_pid_tune_network();
+
+    drvSys_PID_Gains predict_optimal_gains(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
+
+    void learning_step_pid_tuner();
+
+
     NeuralNetwork* emulator_nn;
     NeuralNetwork* controller_nn;
+    NeuralNetwork* pid_tuner_nn;
     float emulator_error = 0;
     float average_emulator_error = 0;
 
     float average_control_error = 0;
     float control_error = 0;
 
+    float pid_tune_control_error = 0;
+    float average_pid_tune_control_error = 0;
+
 
     NeuralNetwork* inverse_dynamic_control_nn;
+
+    const float pid_sample_time_in_sec = 1000 * 1e-6;
 
 
 
@@ -109,6 +127,7 @@ private:
 
     char emulator_name[7] = "emu_nn";
     char controller_name[9] = "contr_nn";
+    char pid_tuner_name[7] = "pid_nn";
 
     static const int controller_depth = 4;
     int controller_width[controller_depth] = { 10,12,6,1 };
@@ -127,8 +146,21 @@ private:
     const float inv_max_joint_torque = 1 / max_joint_torque;
 
     // PID Tuner
+    static const int pid_tune_depth = 3;
+    int pid_tune_width[pid_tune_depth] = { 10,10,3 };
+    nn_activation_f pid_tune_act[pid_tune_depth - 1] = { leakyReLu, ReLu };
+
+
+
+    SemaphoreHandle_t mutex_pid_sample_buffer;
+    SemaphoreHandle_t mutex_pid_tuner_nn;
+
 
     CircularBuffer<pid_tune_sample, 5> tuning_buffer;
+
+    drvSys_PID_Gains init_gains;
+    drvSys_PID_Gains opt_gains;
+
 
 
 
@@ -139,4 +171,4 @@ private:
 
 
 
-#endif // NEURAL_CONTROLLER
+#endif // NEURAL_CONTROLLER_H

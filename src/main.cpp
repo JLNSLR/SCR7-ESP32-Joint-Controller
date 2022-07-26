@@ -125,7 +125,7 @@ void loop()
 
     counter++;
 
-    if (counter % 600 == 0) {
+    if (counter % 300 == 0) {
 
       if (!motion_planner.executing_traj_flag) {
         target = (float(rand()) / float(RAND_MAX)) * 175;
