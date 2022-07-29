@@ -84,6 +84,10 @@ void PIDController::compute()
         dError = 0;
     }
 
+    if (d_term_vel) {
+        dError = velError;
+    }
+
 
     /* Compute Derivative Filter */
     if (filterDerivative)

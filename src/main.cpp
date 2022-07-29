@@ -56,7 +56,7 @@ void setup()
   // Calibration of FOC
   //drvSys_calibrate_FOC();
 
-  //drvSys_start_motion_control(closed_loop_foc);
+  drvSys_start_motion_control(closed_loop_foc);
 
   /** Setup ASCI Interface */
 
@@ -123,77 +123,80 @@ void loop()
 
 
 
-    counter++;
+  counter++;
 
-    if (counter % 300 == 0) {
+  /*
+  if (counter % 500 == 0) {
 
-      if (!motion_planner.executing_traj_flag) {
-        target = (float(rand()) / float(RAND_MAX)) * 175;
-        if (counter % 5 == 0) {
-          dir = -dir;
-        }
-        vel = (float(rand()) / float(RAND_MAX)) * 60.0;
-        acc = (float(rand()) / float(RAND_MAX)) * 1000.0;
-
-        handle_motion_command(target * DEG2RAD * dir, vel * DEG2RAD, acc * DEG2RAD);
+    if (!motion_planner.executing_traj_flag) {
+      target = (float(rand()) / float(RAND_MAX)) * 175;
+      if (counter % 5 == 0) {
+        dir = -dir;
       }
+      vel = (float(rand()) / float(RAND_MAX)) * 60.0;
+      acc = (float(rand()) / float(RAND_MAX)) * 1000.0;
 
-
+      handle_motion_command(target * DEG2RAD * dir, vel * DEG2RAD, acc * DEG2RAD);
     }
 
-    /*
-     Serial.println("Sending packet");
 
-     CAN.beginPacket(0x12);
-     CAN.write('h');
-     CAN.write('e');
-     CAN.write('l');
-     CAN.write('l');
-     CAN.write('o');
-     CAN.endPacket();
-
-     Serial.println("done");
-
-     vTaskDelay(2000);
+  }
+  */
 
 
+  /*
+   Serial.println("Sending packet");
+
+   CAN.beginPacket(0x12);
+   CAN.write('h');
+   CAN.write('e');
+   CAN.write('l');
+   CAN.write('l');
+   CAN.write('o');
+   CAN.endPacket();
+
+   Serial.println("done");
+
+   vTaskDelay(2000);
 
 
-     // try to parse packet
-     int packetSize = CAN.parsePacket();
 
-     if (packetSize) {
-       // received a packet
-       Serial.print("Received ");
 
-       if (CAN.packetExtended()) {
-         Serial.print("extended ");
+   // try to parse packet
+   int packetSize = CAN.parsePacket();
+
+   if (packetSize) {
+     // received a packet
+     Serial.print("Received ");
+
+     if (CAN.packetExtended()) {
+       Serial.print("extended ");
+     }
+
+     if (CAN.packetRtr()) {
+       // Remote transmission request, packet contains no data
+       Serial.print("RTR ");
+     }
+
+     Serial.print("packet with id 0x");
+     Serial.print(CAN.packetId(), HEX);
+
+     if (CAN.packetRtr()) {
+       Serial.print(" and requested length ");
+       Serial.println(CAN.packetDlc());
+     } else {
+       Serial.print(" and length ");
+       Serial.println(packetSize);
+
+       // only print packet data for non-RTR packets
+       while (CAN.available()) {
+         Serial.print((char)CAN.read());
        }
-
-       if (CAN.packetRtr()) {
-         // Remote transmission request, packet contains no data
-         Serial.print("RTR ");
-       }
-
-       Serial.print("packet with id 0x");
-       Serial.print(CAN.packetId(), HEX);
-
-       if (CAN.packetRtr()) {
-         Serial.print(" and requested length ");
-         Serial.println(CAN.packetDlc());
-       } else {
-         Serial.print(" and length ");
-         Serial.println(packetSize);
-
-         // only print packet data for non-RTR packets
-         while (CAN.available()) {
-           Serial.print((char)CAN.read());
-         }
-         Serial.println();
-       }
-
        Serial.println();
+     }
 
-     }*/
+     Serial.println();
+
+   }*/
 
 }

@@ -56,6 +56,8 @@ struct drvSys_FullDriveState {
 struct drvSys_FullDriveStateTimeSample {
     drvSys_FullDriveState state;
     drvSys_FullDriveState state_prev;
+
+    float drvSys_feedback_torque;
 };
 
 struct drvSys_driveTargets {

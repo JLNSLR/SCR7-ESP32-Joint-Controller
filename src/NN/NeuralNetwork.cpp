@@ -657,7 +657,7 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
 
                         if (abs(weights_grad[layer][neuron][connection]) > __FLT_MAX__) {
                             weights_grad[layer][neuron][connection] = 0.01 * weights_grad[layer][neuron][connection];
-                    }
+                        }
 #endif // NN_DEBUG
 
                         weights[layer][neuron][connection] -= learning_rate * weights_grad[layer][neuron][connection];
@@ -665,7 +665,7 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
                         Serial.print(" After:");
                         Serial.println(weights[layer][neuron][connection]);
 #endif
-                }
+                    }
 
                     else if (update_method == adam) {
                         adam_m[layer][neuron][connection] = beta_1 * adam_m[layer][neuron][connection] + (1 - beta_1) * weights_grad[layer][neuron][connection];
@@ -687,11 +687,11 @@ void NeuralNetwork::apply_gradient_descent(grad_descent_update_rule update_metho
                         weights[layer][neuron][connection] -= learning_rate * weight_update;
                     }
 
-            }
+                }
 
+            }
         }
     }
-}
 
 
 
@@ -825,12 +825,12 @@ diff_fct_out NeuralNetwork::get_loss(float x, nn_loss_function loss_type) {
             loss.derivative = x;
         }
         if (abs(x) >= huber_threshold) {
-            loss.x = (abs(x) - 0.5 * huber_threshold) * huber_loss;
+            loss.x = (abs(x) - 0.5 * huber_threshold);
             if (x >= 0) {
-                loss.derivative = 0.5;
+                loss.derivative = 1.0;
             }
             else {
-                loss.derivative = -0.5;
+                loss.derivative = -1.0;
             }
         }
     }
@@ -1081,7 +1081,7 @@ void NeuralNetwork::apply_learning_rate_scheduler() {
 
     if (lr_schedule == cosine_annealing) {
 
-        n_iterations_since_restart = n_iterations % (n_warm_restart_period * n_warm_restart_multiplier);
+        n_iterations_since_restart = n_iterations % int((n_warm_restart_period * n_warm_restart_multiplier));
 
         learning_rate = minimal_learning_rate + 0.5 * (maximal_learning_rate - minimal_learning_rate) * (1 + cosf(PI * (float(n_iterations_since_restart) / float((n_warm_restart_period * n_warm_restart_multiplier)))));
 
@@ -1111,11 +1111,13 @@ void NeuralNetwork::apply_learning_rate_scheduler() {
 void NeuralNetwork::printWeights() {
     nn_model_weights weights = get_model_weights();
 
+    /*
     for (int i = 0; i < weights.n_weights; i++) {
         Serial.print(i);
         Serial.print(" ");
         Serial.println(weights.weights[i]);
     }
+    */
 }
 
 

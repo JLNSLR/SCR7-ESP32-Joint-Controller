@@ -31,8 +31,11 @@ union emulator_sample {
         float joint_vel_next;
         float joint_acc_next;
     }data;
-    float inputs[8];
-    float outputs[3];
+    struct {
+        float inputs[8];
+        float outputs[3];
+    }arrays;
+
 };
 
 union inverse_dyn_control_sample {
@@ -60,13 +63,6 @@ struct full_neural_control_sample {
     drvSys_driveTargets target_sample;
 };
 
-struct pid_tune_sample {
-    drvSys_FullDriveState state;
-    drvSys_driveTargets targets;
-    float error;
-    float error_sum;
-    float dError;
-};
 
 class NeuralController {
 
@@ -77,36 +73,33 @@ public:
     void learning_step_emulator();
     drvSys_driveState emulator_predict_next_state(drvSys_FullDriveState current_state);
 
-    void add_pid_sample(drvSys_FullDriveState state, drvSys_driveTargets target, float error, float Iterm, float dError);
-
     float predict_control_torque(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
+    float inverse_dynamics_predict_torque(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
     void learning_step_controller();
+
+    void learning_step_inverse_dyn();
 
     void save_emulator_network();
     void save_controller_network();
-    void save_pid_tune_network();
+    void reset_emulator_network();
+    void reset_controller_network();
 
-    drvSys_PID_Gains predict_optimal_gains(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
-
-    void learning_step_pid_tuner();
 
 
     NeuralNetwork* emulator_nn;
     NeuralNetwork* controller_nn;
-    NeuralNetwork* pid_tuner_nn;
-    float emulator_error = 0;
-    float average_emulator_error = 0;
 
-    float average_control_error = 0;
+    NeuralNetwork* inverse_dyn_nn;
+    float emulator_error = 0;
+    float average_emulator_error = 1e2;
+
+    float average_control_error = 1e2;
     float control_error = 0;
 
-    float pid_tune_control_error = 0;
-    float average_pid_tune_control_error = 0;
+    bool control_net_pretrained = false;
 
 
-    NeuralNetwork* inverse_dynamic_control_nn;
 
-    const float pid_sample_time_in_sec = 1000 * 1e-6;
 
 
 
@@ -124,14 +117,22 @@ private:
     SemaphoreHandle_t mutex_training_buffer;
     SemaphoreHandle_t mutex_emulator;
     SemaphoreHandle_t mutex_controller;
+    SemaphoreHandle_t mutex_inv_dyn;
 
     char emulator_name[7] = "emu_nn";
     char controller_name[9] = "contr_nn";
     char pid_tuner_name[7] = "pid_nn";
+    char inv_name[7] = "inv_nn";
 
     static const int controller_depth = 4;
     int controller_width[controller_depth] = { 10,12,6,1 };
     nn_activation_f controller_act[controller_depth - 1] = { leakyReLu,leakyReLu,Linear };
+
+    static const int inv_depth = 4;
+    int inv_width[inv_depth] = { 10,12,6,1 };
+    nn_activation_f inv_act[inv_depth - 1] = { leakyReLu,leakyReLu,Linear };
+
+    emulator_sample current_sample;
 
 
     const float max_angle = 180.0 * DEG2RAD;
@@ -144,27 +145,6 @@ private:
     const float inv_max_motor_torque = 1.0 / max_motor_torque;
     const float max_joint_torque = 100;
     const float inv_max_joint_torque = 1 / max_joint_torque;
-
-    // PID Tuner
-    static const int pid_tune_depth = 3;
-    int pid_tune_width[pid_tune_depth] = { 10,10,3 };
-    nn_activation_f pid_tune_act[pid_tune_depth - 1] = { leakyReLu, ReLu };
-
-
-
-    SemaphoreHandle_t mutex_pid_sample_buffer;
-    SemaphoreHandle_t mutex_pid_tuner_nn;
-
-
-    CircularBuffer<pid_tune_sample, 5> tuning_buffer;
-
-    drvSys_PID_Gains init_gains;
-    drvSys_PID_Gains opt_gains;
-
-
-
-
-
 
 
 };

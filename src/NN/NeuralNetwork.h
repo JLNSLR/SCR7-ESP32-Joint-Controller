@@ -131,7 +131,7 @@ public:
     float minimal_learning_rate = 1e-3;
     float maximal_learning_rate = 8e-3;
     int n_warm_restart_period = 1e4;
-    int n_warm_restart_multiplier = 1.25;
+    float n_warm_restart_multiplier = 1.25;
     bool cosine_decay = true;
 
 private:

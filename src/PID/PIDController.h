@@ -21,6 +21,8 @@ public:
     void compute();
     void setTuning(float kp, float ki, float kd);
 
+    void setVelocityDTerm(float vel_error);
+
     // set sampleTime in us
     void setSampleTime(int newSampleTime_us);
 
@@ -58,9 +60,13 @@ public:
     float dError = 0;
     float iTerm = 0;
 
+    float velError = 0;
+
     bool derivative_on_measurement = true;
 
     float gains[3];
+
+    bool d_term_vel = true;
 
 private:
     float kp, ki, kd;

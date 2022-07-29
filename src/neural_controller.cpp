@@ -8,14 +8,15 @@ NeuralController::NeuralController() {
 void NeuralController::init() {
 
     emulator_nn = new NeuralNetwork(emulator_depth, emulator_width, emulator_act);
-    emulator_nn->loss_type = MSE;
-    emulator_nn->learning_rate = 1e-3;
+    emulator_nn->loss_type = huber_loss;
+    emulator_nn->learning_rate = 1e-4;
     emulator_nn->lr_schedule = no_schedule;
     emulator_nn->update_rule = adam;
     emulator_nn->lr_error_factor = 5e-4;
     emulator_nn->minimal_learning_rate = 1e-4;
-    emulator_nn->init_weights_randomly(0.5, -0.3);
-    emulator_nn->max_gradient_abs = 10.0;
+    emulator_nn->maximal_learning_rate = 1e-2;
+    emulator_nn->init_weights_randomly(0.3, -0.3);
+    emulator_nn->max_gradient_abs = 0.1;
     emulator_nn->regularization = none;
     emulator_nn->reg_penalty_factor = 1e-4;
 
@@ -39,12 +40,13 @@ void NeuralController::init() {
 
     controller_nn = new NeuralNetwork(controller_depth, controller_width, controller_act);
     controller_nn->loss_type = MSE;
-    controller_nn->learning_rate = 1e-2;
+    controller_nn->learning_rate = 0.5e-3;
     controller_nn->lr_schedule = no_schedule;
     controller_nn->update_rule = adam;
-    controller_nn->lr_error_factor = 5e-4;
+    controller_nn->lr_error_factor = 1e-4;
     controller_nn->minimal_learning_rate = 1e-4;
-    controller_nn->init_weights_randomly(0.001, -0.001);
+    controller_nn->maximal_learning_rate = 1e-2;
+    controller_nn->init_weights_randomly(0.005, -0.005);
     controller_nn->max_gradient_abs = 0.1;
     controller_nn->regularization = none;
     controller_nn->reg_penalty_factor = 1e-4;
@@ -61,49 +63,46 @@ void NeuralController::init() {
     if (controller_weights.n_weights == controller_nn->n_weights) {
         controller_nn->load_model_weights(controller_weights);
         Serial.println("DRVSYS_NN_INFO: Loaded Weights for Controller Network from Flash");
+        control_net_pretrained = true;
     }
 
 
     xSemaphoreGive(mutex_controller);
 
+    // Initializing neural controller
 
-    // Initialize PID Tuner Network
+    inverse_dyn_nn = new NeuralNetwork(inv_depth, inv_width, inv_act);
+    inverse_dyn_nn->loss_type = huber_loss;
+    inverse_dyn_nn->learning_rate = 1e-4;
+    inverse_dyn_nn->lr_schedule = no_schedule;
+    inverse_dyn_nn->update_rule = adam;
+    inverse_dyn_nn->lr_error_factor = 1e-4;
+    inverse_dyn_nn->minimal_learning_rate = 1e-4;
+    inverse_dyn_nn->maximal_learning_rate = 1e-2;
+    inverse_dyn_nn->init_weights_randomly(0.05, -0.05);
+    inverse_dyn_nn->max_gradient_abs = 0.1;
+    inverse_dyn_nn->regularization = none;
+    inverse_dyn_nn->reg_penalty_factor = 1e-4;
 
-    pid_tuner_nn = new NeuralNetwork(pid_tune_depth, pid_tune_width, pid_tune_act);
-    pid_tuner_nn->loss_type = MSE;
-    pid_tuner_nn->learning_rate = 1e-3;
-    pid_tuner_nn->lr_schedule = error_adaptive;
-    pid_tuner_nn->update_rule = adam;
-    pid_tuner_nn->lr_error_factor = 5e-4;
-    pid_tuner_nn->minimal_learning_rate = 1e-3;
-    pid_tuner_nn->init_weights_randomly(1.5, -0.5);
-    pid_tuner_nn->max_gradient_abs = 10.0;
-    pid_tuner_nn->regularization = none;
-    pid_tuner_nn->reg_penalty_factor = 1e-4;
 
-
-    mutex_pid_tuner_nn = xSemaphoreCreateBinary();
-    mutex_pid_sample_buffer = xSemaphoreCreateBinary();
+    mutex_inv_dyn = xSemaphoreCreateBinary();
 
 
 
     //load weights from Flash
-    nn_model_weights tuner_weights = nn_load_model_weights_from_flash(pid_tuner_name, pid_tuner_nn->n_weights);
+    /*
+    nn_model_weights inv_dyn_weights = nn_load_model_weights_from_flash(inv_name, inverse_dyn_nn->n_weights);
 
-    if (tuner_weights.n_weights == pid_tuner_nn->n_weights) {
-        pid_tuner_nn->load_model_weights(tuner_weights);
-        Serial.println("DRVSYS_NN_INFO: Loaded Weights for PID Tuner Network from Flash");
+    if (inv_dyn_weights.n_weights == inverse_dyn_nn->n_weights) {
+        inverse_dyn_nn->load_model_weights(inv_dyn_weights);
+        Serial.println("DRVSYS_NN_INFO: Loaded Weights for Inverse Dynamics from Flash");
     }
 
-    init_gains.K_p = PID_GAIN_P;
-    init_gains.K_i = PID_GAIN_I;
-    init_gains.K_d = PID_GAIN_D;
-    init_gains.K_vel_ff = PID_VEL_FF;
 
-    xSemaphoreGive(mutex_pid_tuner_nn);
-    xSemaphoreGive(mutex_pid_sample_buffer);
+    xSemaphoreGive(mutex_inv_dyn);
+    */
 
-
+    xSemaphoreGive(mutex_inv_dyn);
 
 }
 
@@ -119,19 +118,6 @@ void NeuralController::add_sample(drvSys_FullDriveStateTimeSample sample, drvSys
     xSemaphoreGive(mutex_training_buffer);
 }
 
-void NeuralController::add_pid_sample(drvSys_FullDriveState state, drvSys_driveTargets target, float error, float Iterm, float dError) {
-
-    pid_tune_sample sample;
-    sample.state = state;
-    sample.error = error;
-    sample.error_sum = Iterm;
-    sample.dError = dError;
-    sample.targets = target;
-
-    xSemaphoreTake(mutex_pid_sample_buffer, portMAX_DELAY);
-    tuning_buffer.push(sample);
-    xSemaphoreGive(mutex_pid_sample_buffer);
-}
 
 void NeuralController::learning_step_emulator() {
 
@@ -140,14 +126,40 @@ void NeuralController::learning_step_emulator() {
     }
     else {
 
-        emulator_sample sample = get_emulator_sample(training_buffer.last().state_sample);
+        current_sample = get_emulator_sample(training_buffer.last().state_sample);
+
+
+
+        float input[8];
+        input[0] = current_sample.data.joint_pos;
+        input[1] = current_sample.data.joint_vel;
+        input[2] = current_sample.data.joint_acc;
+        input[3] = current_sample.data.motor_pos;
+        input[4] = current_sample.data.motor_vel;
+        input[5] = current_sample.data.motor_acc;
+        input[6] = current_sample.data.motor_torque;
+        input[7] = current_sample.data.joint_torque;
+
+        float output[3];
+        output[0] = current_sample.data.joint_pos_next;
+        output[1] = current_sample.data.joint_vel_next;
+        output[2] = current_sample.data.joint_acc_next;
+
+        /*
+        Serial.println("sample check ---");
+        Serial.println(current_sample.data.joint_pos);
+        Serial.println(current_sample.data.joint_pos_next);
+        Serial.println(input[0]);
+        Serial.println(output[0]);
+        Serial.println("---");
+        */
 
         xSemaphoreTake(mutex_emulator, portMAX_DELAY);
-        emulator_error = emulator_nn->train_SGD(sample.inputs, sample.outputs);
+        emulator_error = emulator_nn->train_SGD(input, output);
         xSemaphoreGive(mutex_emulator);
         emulator_counter++;
 
-        average_emulator_error = emulator_error * (0.1) + average_emulator_error * (1 - 0.1);
+        average_emulator_error = emulator_error * (1e-3) + average_emulator_error * (1 - 1e-3);
 
 
 
@@ -172,20 +184,19 @@ emulator_sample NeuralController::get_emulator_sample(drvSys_FullDriveStateTimeS
     emulator_data.data.joint_pos_next = data.state.joint_pos * inv_max_angle;
     emulator_data.data.joint_vel_next = data.state.joint_vel * inv_max_vel;
     emulator_data.data.joint_acc_next = data.state.joint_acc * inv_max_acc;
-
 #ifdef NN_CONTROL_DEBUG
-    Serial.println(emulator_data.inputs[0]);
+    Serial.println(emulator_data.arrays.inputs[0]);
     Serial.println(emulator_data.data.joint_pos);
     Serial.println(emulator_data.data.joint_vel);
-    Serial.println(emulator_data.inputs[1]);
+    Serial.println(emulator_data.arrays.inputs[1]);
     Serial.println("vel data");
-    Serial.println(emulator_data.data.joint_vel_next);
-    Serial.println(emulator_data.outputs[1]);
+    Serial.println(emulator_data.data.joint_pos_next);
+    Serial.println(emulator_data.arrays.outputs[0]);
     Serial.println(emulator_data.data.motor_vel);
-    Serial.println(emulator_data.inputs[4]);
+    Serial.println(emulator_data.arrays.inputs[4]);
     Serial.println("..");
 
-    Serial.println(emulator_data.outputs[2]);
+    Serial.println(emulator_data.arrays.outputs[2]);
     Serial.println(emulator_data.data.joint_acc_next);
 #endif // NN_CONTROL_DEBUG
 
@@ -208,12 +219,26 @@ drvSys_driveState NeuralController::emulator_predict_next_state(drvSys_FullDrive
     inputs[5] = current_state.motor_acc * inv_max_acc;
     inputs[6] = current_state.motor_torque * inv_max_motor_torque;
     inputs[7] = current_state.joint_torque * inv_max_joint_torque;
+    /*
+    Serial.println(inputs[0]);
+    Serial.println(inputs[1]);
+    Serial.println(inputs[2]);
+    Serial.println(inputs[3]);
+    Serial.println(inputs[4]);
+    Serial.println(inputs[5]);
+    Serial.println(inputs[6]);
+    Serial.println(inputs[6]);
+    */
+
+
     xSemaphoreTake(mutex_emulator, portMAX_DELAY);
 
     float* outputs = emulator_nn->predict(inputs);
     pred_state.joint_pos = outputs[0] * max_angle;
     pred_state.joint_vel = outputs[1] * max_vel;
     pred_state.joint_acc = outputs[2] * max_acc;
+
+
 
     xSemaphoreGive(mutex_emulator);
 
@@ -246,7 +271,7 @@ void NeuralController::learning_step_controller() {
 
         // simulate system output  
 
-        float epsilon = 1e-3;
+        float epsilon = 1e-4;
 
 
         float input_vector[10];
@@ -261,9 +286,12 @@ void NeuralController::learning_step_controller() {
         input_vector[8] = sample.target_sample.vel_target * inv_max_vel;
         input_vector[9] = sample.target_sample.acc_target * inv_max_acc;
 
+        control_error = abs((sample.state_sample.state.joint_pos - sample.target_sample.pos_target)) +
+            abs((sample.state_sample.state.joint_vel - sample.target_sample.vel_target));
         xSemaphoreTake(mutex_controller, portMAX_DELAY);
 
-        float output_torque = *controller_nn->predict(input_vector) * max_motor_torque;
+        float output_torque_norm = *controller_nn->predict(input_vector);
+        /*
 
         drvSys_FullDriveState state_plus_epsilon = sample.state_sample.state_prev;
         state_plus_epsilon.motor_torque = output_torque + epsilon;
@@ -273,27 +301,44 @@ void NeuralController::learning_step_controller() {
 
         drvSys_driveState output_state_plus_epsilon = emulator_predict_next_state(state_plus_epsilon);
         drvSys_driveState output_state_min_epsilon = emulator_predict_next_state(state_min_epsilon);
-
-        float dpos_du = (output_state_plus_epsilon.joint_pos - output_state_min_epsilon.joint_pos) / (2.0 * epsilon);
-        float dvel_du = (output_state_plus_epsilon.joint_vel - output_state_min_epsilon.joint_vel) / (2.0 * epsilon);
-
         drvSys_FullDriveState state_sim = sample.state_sample.state_prev;
         state_sim.motor_torque = output_torque;
         drvSys_driveState emulator_out = emulator_predict_next_state(state_sim);
 
+        float dpos_du = (output_state_plus_epsilon.joint_pos - output_state_min_epsilon.joint_pos) / (2.0 * epsilon);
+        float dvel_du = (output_state_plus_epsilon.joint_vel - output_state_min_epsilon.joint_vel) / (2.0 * epsilon);
+
+
+
         float pos_error = emulator_out.joint_pos - sample.target_sample.pos_target;
         float vel_error = emulator_out.joint_vel - sample.target_sample.vel_target;
 
-        control_error = (pos_error * pos_error + vel_error * vel_error) * 0.5;
+        control_error = (pos_error * pos_error) * 0.5;
 
-        float derror_du = pos_error * dpos_du * inv_max_angle + vel_error * dvel_du * inv_max_vel + 2.0 * output_torque * inv_max_motor_torque;
+        float bound_derivative = 0;
+
+        if (output_torque > max_motor_torque) {
+            bound_derivative = 100;
+        }
+        else if (output_torque < -max_motor_torque) {
+            bound_derivative = -100;
+        }
+
+
+
+        float derror_du = -pos_error * dpos_du * inv_max_angle + 0.1 * -vel_error * dvel_du * inv_max_vel + 0.1 * output_torque * inv_max_motor_torque;
+        */
+
+        float derror_du = -sample.state_sample.drvSys_feedback_torque * inv_max_motor_torque + output_torque_norm * 0.75;
 
         controller_nn->backpropagation(input_vector, control_error, &derror_du);
 
-        controller_nn->apply_gradient_descent();
+        controller_nn->apply_gradient_descent(adam);
 
         xSemaphoreGive(mutex_controller);
-        average_control_error = control_error * (0.1) + average_control_error * (1 - 0.1);
+
+        average_control_error = average_control_error * (1 - 1e-4) + control_error * 1e-4;
+
 
     }
 }
@@ -318,7 +363,10 @@ float NeuralController::predict_control_torque(drvSys_FullDriveState current_sta
 
     if (xSemaphoreTake(mutex_controller, (TickType_t)1) == pdTRUE) {
         pred_torque = *controller_nn->predict(input) * max_motor_torque;
+
+        last_pred = pred_torque;
         xSemaphoreGive(mutex_controller);
+
     }
     else {
         pred_torque = last_pred;
@@ -327,6 +375,70 @@ float NeuralController::predict_control_torque(drvSys_FullDriveState current_sta
     return pred_torque;
 
 
+}
+
+void NeuralController::learning_step_inverse_dyn() {
+    if (training_buffer.isEmpty()) {
+        return;
+    }
+    else {
+        xSemaphoreTake(mutex_training_buffer, portMAX_DELAY);
+        full_neural_control_sample sample = training_buffer.last();
+        xSemaphoreGive(mutex_training_buffer);
+
+
+        float input_vector[10];
+        input_vector[0] = sample.state_sample.state_prev.joint_pos * inv_max_angle;
+        input_vector[1] = sample.state_sample.state_prev.joint_vel * inv_max_vel;
+        input_vector[2] = sample.state_sample.state_prev.joint_acc * inv_max_acc;
+        input_vector[3] = sample.state_sample.state_prev.motor_pos * inv_max_angle;
+        input_vector[4] = sample.state_sample.state_prev.motor_vel * inv_max_vel;
+        input_vector[5] = sample.state_sample.state_prev.motor_acc * inv_max_acc;
+        input_vector[6] = sample.state_sample.state_prev.joint_torque * inv_max_joint_torque;
+        // take next state data
+        input_vector[7] = sample.state_sample.state.joint_pos * inv_max_angle;
+        input_vector[8] = sample.state_sample.state.joint_vel * inv_max_vel;
+        input_vector[9] = sample.state_sample.state.joint_acc * inv_max_acc;
+
+        float output = sample.state_sample.state_prev.motor_torque * inv_max_motor_torque;
+
+        xSemaphoreTake(mutex_inv_dyn, portMAX_DELAY);
+        float inv_dyn_error = inverse_dyn_nn->train_SGD(input_vector, &output);
+        xSemaphoreGive(mutex_inv_dyn);
+
+
+    }
+}
+
+float NeuralController::inverse_dynamics_predict_torque(drvSys_FullDriveState current_state, drvSys_driveTargets targets) {
+    static float last_pred = 0;
+
+    float pred_torque = 0;
+
+    float input[10];
+    input[0] = current_state.joint_pos * inv_max_angle;
+    input[1] = current_state.joint_vel * inv_max_vel;
+    input[2] = current_state.joint_acc * inv_max_acc;
+    input[3] = current_state.motor_pos * inv_max_angle;
+    input[4] = current_state.motor_vel * inv_max_vel;
+    input[5] = current_state.motor_acc * inv_max_acc;
+    input[6] = current_state.joint_torque * inv_max_joint_torque;
+    input[7] = targets.pos_target * inv_max_angle;
+    input[8] = targets.vel_target * inv_max_vel;
+    input[9] = targets.acc_target * inv_max_acc;
+
+    if (xSemaphoreTake(mutex_inv_dyn, (TickType_t)1) == pdTRUE) {
+        pred_torque = *inverse_dyn_nn->predict(input) * max_motor_torque;
+
+        last_pred = pred_torque;
+        xSemaphoreGive(mutex_inv_dyn);
+
+    }
+    else {
+        pred_torque = last_pred;
+    }
+
+    return pred_torque;
 }
 
 void NeuralController::save_controller_network() {
@@ -340,119 +452,18 @@ void NeuralController::save_controller_network() {
 
 }
 
+void NeuralController::reset_controller_network() {
 
-drvSys_PID_Gains NeuralController::predict_optimal_gains(drvSys_FullDriveState state, drvSys_driveTargets targets) {
-
-    float input[10];
-    input[0] = state.joint_pos * inv_max_angle;
-    input[1] = state.joint_vel * inv_max_vel;
-    input[2] = state.joint_acc * inv_max_acc;
-    input[3] = state.motor_pos * inv_max_angle;
-    input[4] = state.motor_vel * inv_max_vel;
-    input[5] = state.motor_acc * inv_max_acc;
-    input[6] = state.joint_torque * inv_max_joint_torque;
-    input[7] = targets.pos_target * inv_max_angle;
-    input[8] = targets.vel_target * inv_max_vel;
-    input[9] = targets.acc_target * inv_max_acc;
-
-    //Serial.println("want to pred gains");
-
-    xSemaphoreTake(mutex_pid_tuner_nn, portMAX_DELAY);
-    float* outputs = pid_tuner_nn->predict(input);
-
-    //Serial.println("try to read gains");
-
-    opt_gains.K_p = outputs[0];
-    opt_gains.K_i = outputs[1];
-    opt_gains.K_d = outputs[2];
-    //Serial.println("got gains");
-
-    opt_gains.K_vel_ff = init_gains.K_vel_ff;
-
-    init_gains = opt_gains;
-    xSemaphoreGive(mutex_pid_tuner_nn);
-
-
-
-    return opt_gains;
-
+    nn_clear_data_on_flash(controller_name);
+    Serial.println("DRVSYS_NN: Reset Controller Network Weights on Flash");
 }
 
-void NeuralController::learning_step_pid_tuner() {
-
-    if (tuning_buffer.isEmpty()) {
-        return;
-    }
-    else {
-        pid_tune_sample sample = tuning_buffer.pop();
-
-
-        float input[10];
-        input[0] = sample.state.joint_pos * inv_max_angle;
-        input[1] = sample.state.joint_vel * inv_max_vel;
-        input[2] = sample.state.joint_acc * inv_max_acc;
-        input[3] = sample.state.motor_pos * inv_max_angle;
-        input[4] = sample.state.motor_vel * inv_max_vel;
-        input[5] = sample.state.motor_acc * inv_max_acc;
-        input[6] = sample.state.joint_torque * inv_max_joint_torque;
-        input[7] = sample.targets.pos_target * inv_max_angle;
-        input[8] = sample.targets.vel_target * inv_max_vel;
-        input[9] = sample.targets.acc_target * inv_max_acc;
-
-        xSemaphoreTake(mutex_pid_tuner_nn, portMAX_DELAY);
-        float* gains = pid_tuner_nn->predict(input);
-
-
-        // construct pid output torque
-
-        float output_torque = gains[0] * sample.error + gains[1] * sample.error_sum * pid_sample_time_in_sec + gains[2] * sample.dError * (1.0 / pid_sample_time_in_sec);
-
-        drvSys_FullDriveState sim_state;
-        sim_state = sample.state;
-        sim_state.motor_torque = output_torque;
-
-        float epsilon = 1e-3;
-
-        drvSys_FullDriveState sim_state_plus_eps = sim_state;
-        drvSys_FullDriveState sim_state_min_eps = sim_state;
-        sim_state_plus_eps.motor_torque = output_torque + epsilon;
-        sim_state_min_eps.motor_torque = output_torque - epsilon;
-
-        drvSys_driveState state_sim_output = emulator_predict_next_state(sim_state);
-
-        drvSys_driveState state_plus_eps = emulator_predict_next_state(sim_state_plus_eps);
-        drvSys_driveState state_min_eps = emulator_predict_next_state(sim_state_min_eps);
-
-        float pos_error = state_sim_output.joint_pos - sample.targets.pos_target;
-        float vel_error = state_sim_output.joint_vel - sample.targets.vel_target;
-
-        pid_tune_control_error = (pos_error * pos_error + vel_error * vel_error) * 0.5;
-
-        float dpos_du = (state_plus_eps.joint_pos - state_min_eps.joint_pos) / (2.0 * epsilon);
-        float dvel_du = (state_plus_eps.joint_vel - state_min_eps.joint_vel) / (2.0 * epsilon);
-
-        float du_dKp = sample.error;
-        float du_dKi = sample.error_sum * pid_sample_time_in_sec;
-        float du_dKd = sample.dError * (1.0 / pid_sample_time_in_sec);
-
-
-        float derror_dKp = du_dKp * (pos_error * dpos_du + vel_error * dvel_du);
-        float derror_dKi = du_dKi * (pos_error * dpos_du + vel_error * dvel_du);
-        float derror_dKd = du_dKd * (pos_error * dpos_du + vel_error * dvel_du);
-
-        float error_derivatives[3] = { derror_dKp, derror_dKi, derror_dKd };
-
-        pid_tuner_nn->backpropagation(input, pid_tune_control_error, error_derivatives);
-
-        pid_tuner_nn->apply_gradient_descent();
-
-        xSemaphoreGive(mutex_pid_tuner_nn);
-
-        average_pid_tune_control_error = pid_tune_control_error * (0.1) + average_pid_tune_control_error * (1 - 0.1);
-
-    }
-
+void NeuralController::reset_emulator_network() {
+    nn_clear_data_on_flash(emulator_name);
+    Serial.println("DRVSYS_NN: Reset Emulator Network Weights on Flash");
 }
+
+
 
 
 

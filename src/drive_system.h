@@ -208,22 +208,32 @@ void _drvSys_align_axis();
 void _drvSys_neural_controller_setup();
 void _drvSys_learn_neural_control_task(void* parameters);
 void drvSys_neural_control_activate(bool active);
-void drvSys_neural_control_set_learning_rate(float lr, float lr_error_scale);
+void drvSys_neural_control_save_nets(bool reset = false);
+/**
+ * @brief Adapts parameters of NN online
+ *
+ * @param nn_type 0 - Emulator, 1 - Controller
+ * @param parameter_type 0 - lr, 1 - min_lr,  2 - lr_error_factor, 3 - max_lr, 4 -
+ * @param value
+ */
+void drvSys_adapt_nn_parameter(int nn_type, int parameter_type, float value);
+/**
+ * @brief
+ *
+ * @param nn_type 0 - Emulator, 1-Controller
+ * @param error_type 0 error, 1 filtered error
+ * @return float
+ */
+float drvSys_get_neural_control_error(int nn_type, int error_type);
+
 float drvSys_neural_control_error();
 float _drvSys_neural_control_predict_torque();
-float drvSys_inv_dyn_read_predicted_torque();
+float drvSys_neural_control_read_predicted_torque();
 drvSys_driveState drvSys_get_emulator_pred();
 
 float drvSys_get_pid_torque();
 
 
-// Neural Network PID Tuner 
-
-void _drvSys_nn_pid_tuner_setup();
-void _drvSys_nn_pid_tuner_learn_pid_tuning_task(void* parameters);
-
-void drvSys_nn_pid_tuner_set_learning_rate(float lr, float lr_error_scale);
-void drvSys_nn_pid_tuner_activate(bool activate);
 
 
 

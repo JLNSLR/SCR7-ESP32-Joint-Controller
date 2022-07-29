@@ -268,9 +268,9 @@ bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]) {
             cli_out_mode = nn_em;
             return processed;
         }
-        if (strcmp(mode, "nn_pid") == 0) {
+        if (strcmp(mode, "load_nn") == 0) {
             cli_output_active = true;
-            cli_out_mode = nn_pid;
+            cli_out_mode = load_control;
             return processed;
         }
 
@@ -311,47 +311,60 @@ bool jctrl_cli_process_nn_commands(char(*cli_arg)[N_MAX_ARGS]) {
         processed = true;
         char* type = cli_arg[1];
         char* command = cli_arg[2];
-        float value_1 = atof(cli_arg[3]);
-        float value_2 = atof(cli_arg[4]);
+        float value = atof(cli_arg[3]);
+
 
         //float acc_noise = atof(acc);
 
-        if (strcmp(type, "inv") == 0) {
-            if (strcmp(command, "lr") == 0) {
+        int net_select = 0;
 
-                drvSys_neural_control_set_learning_rate(value_1, value_2);
-            }
-            if (strcmp(command, "start") == 0) {
-                drvSys_neural_control_activate(true);
-            }
-            if (strcmp(command, "stop") == 0) {
-                drvSys_neural_control_activate(false);
-            }
-            if (strcmp(command, "s") == 0) {
+        if (strcmp(type, "c") == 0) {
 
-            }
+            net_select = 1;
+        }
+        else if (strcmp(type, "emu") == 0) {
+            net_select = 0;
+        }
+        if (strcmp(command, "lr") == 0) {
 
+            drvSys_adapt_nn_parameter(net_select, 0, value);
+        }
+        if (strcmp(command, "grad") == 0) {
+
+            drvSys_adapt_nn_parameter(net_select, 1, value);
+        }
+        if (strcmp(command, "lr_min") == 0) {
+
+            drvSys_adapt_nn_parameter(net_select, 2, value);
+        }
+        if (strcmp(command, "lr_e") == 0) {
+
+            drvSys_adapt_nn_parameter(net_select, 3, value);
+        }
+        if (strcmp(command, "lr_max") == 0) {
+
+            drvSys_adapt_nn_parameter(net_select, 4, value);
+        }
+        if (strcmp(command, "lr_sch") == 0) {
+
+            drvSys_adapt_nn_parameter(net_select, 5, value);
+        }
+        if (strcmp(command, "s") == 0) {
+
+            drvSys_neural_control_save_nets(false);
 
         }
-        if (strcmp(command, "pid") == 0) {
-            if (strcmp(type, "lr") == 0) {
-                drvSys_nn_pid_tuner_set_learning_rate(value_1, value_2);
-            }
-            if (strcmp(command, "start") == 0) {
-                drvSys_nn_pid_tuner_activate(true);
-            }
-            if (strcmp(command, "stop") == 0) {
-                drvSys_nn_pid_tuner_activate(false);
-            }
-            if (strcmp(command, "s") == 0) {
+        if (strcmp(command, "res") == 0 || strcmp(command, "res") == 0) {
 
-            }
+            drvSys_neural_control_save_nets(true);
+
         }
-
-
-
-
+        if (strcmp(type, "act") == 0) {
+            int a = atoi(command);
+            drvSys_neural_control_activate(a);
+        }
     }
+
     return processed;
 }
 
@@ -522,10 +535,41 @@ void _jctrl_cli_output_periodic() {
 
 
         }
+        if (cli_out_mode == load_control) {
+
+            drvSys_driveTargets targets = drvSys_get_targets();
+            drvSys_FullDriveState state = drvSys_get_full_drive_state();
+
+            float current_error = drvSys_get_neural_control_error(1, 0);
+            float average_error = drvSys_get_neural_control_error(1, 1);
+
+            Serial.print(state.joint_pos * RAD2DEG);
+            Serial.print("\t");
+            Serial.print(state.joint_vel * RAD2DEG);
+            Serial.print("\t");
+            Serial.print(state.joint_acc * RAD2DEG);
+            Serial.print("\t");
+            Serial.print(state.motor_torque);
+            Serial.print("\t");
+            Serial.print(state.joint_torque);
+            Serial.print("\t");
+            Serial.print(targets.pos_target * RAD2DEG);
+            Serial.print("\t");
+            Serial.print(targets.vel_target * RAD2DEG);
+            Serial.print("\t");
+            Serial.print(targets.motor_torque_ff);
+            Serial.print("\t");
+            Serial.print(current_error);
+            Serial.print("\t");
+            Serial.println(average_error);
+
+
+        }
         if (cli_out_mode == extended) {
 
             drvSys_driveTargets targets = drvSys_get_targets();
             drvSys_FullDriveState state = drvSys_get_full_drive_state();
+
 
             Serial.print(state.joint_pos * RAD2DEG);
             Serial.print("\t");
@@ -569,8 +613,11 @@ void _jctrl_cli_output_periodic() {
     if (cli_out_mode == nn_inv) {
 
         drvSys_driveState state = drvSys_get_drive_state();
-        float torque_pred = drvSys_inv_dyn_read_predicted_torque();
-        float error = drvSys_neural_control_error();
+        float torque_pred = drvSys_neural_control_read_predicted_torque();
+
+        float current_error = drvSys_get_neural_control_error(1, 0);
+        float average_error = drvSys_get_neural_control_error(1, 1);
+
         float pid_torque = drvSys_get_pid_torque();
 
         Serial.print(state.motor_torque * 100);
@@ -579,13 +626,18 @@ void _jctrl_cli_output_periodic() {
         Serial.print("\t");
         Serial.print(pid_torque * 100);
         Serial.print("\t");
-        Serial.println(error * 100);
+        Serial.print(current_error * 100);
+        Serial.print("\t");
+        Serial.println(average_error * 100);
     }
     if (cli_out_mode == nn_em) {
 
         drvSys_driveState state_pred = drvSys_get_emulator_pred();
 
         const drvSys_driveState actual_state = drvSys_get_drive_state();
+
+        float current_error = drvSys_get_neural_control_error(0, 0);
+        float average_error = drvSys_get_neural_control_error(0, 1);
 
         Serial.print(state_pred.joint_pos * RAD2DEG);
         Serial.print("\t");
@@ -597,34 +649,11 @@ void _jctrl_cli_output_periodic() {
         Serial.print("\t");
         Serial.print(actual_state.joint_vel * RAD2DEG);
         Serial.print("\t");
-        Serial.println(actual_state.joint_acc * RAD2DEG);
-
-
-    }
-
-    if (cli_out_mode == nn_pid) {
-        drvSys_driveState state = drvSys_get_drive_state();
-        drvSys_driveTargets targets = drvSys_get_targets();
-
-        drvSys_PID_Gains gains = drvSys_get_parameters().pid_gains;
-
-        Serial.print(state.joint_pos * RAD2DEG);
+        Serial.print(actual_state.joint_acc * RAD2DEG);
         Serial.print("\t");
-        Serial.print(state.joint_vel * RAD2DEG);
+        Serial.print(current_error * 100);
         Serial.print("\t");
-        Serial.print(targets.pos_target * RAD2DEG);
-        Serial.print("\t");
-        Serial.print(targets.vel_target * RAD2DEG);
-        Serial.print("\t");
-        Serial.print(gains.K_p);
-        Serial.print("\t");
-        Serial.print(gains.K_i);
-        Serial.print("\t");
-        Serial.print(gains.K_d);
-        Serial.print("\t");
-        Serial.println(gains.K_vel_ff);
-
-
+        Serial.println(average_error * 100);
 
 
     }
