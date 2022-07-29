@@ -91,11 +91,9 @@ FOCController drvSys_foc_controller(&drvSys_magnetic_motor_encoder, &drvSys_driv
 // Neural Network to learn inverse dynamics
 NeuralController* neural_controller;
 unsigned int drvSys_max_learning_iterations_per_step = DRVSYS_MAX_LEARNING_ITERATION_PER_STEP;
-float drvSys_inv_dyn_pred_torque = 0.0;
-bool drvSys_inv_dyn_control_active = false;
+float drvSys_neural_control_pred_torque = 0.0;
+bool drvSys_neural_control_active = false;
 
-//Neural Network to learn PID Parameters
-bool drvSys_pid_tuner_active = false;
 
 // Axis alignment Variables
 
@@ -133,6 +131,7 @@ long delta = 0;
 /* ########## Controllers ################ */
 PIDController drvSys_position_controller(0, 0, 0);
 float drvSys_vel_ff_gain = DRVSYS_VEL_FF_GAIN;
+float drvSys_acc_ff_gain = DRVSYS_ACC_FF_GAIN;
 
 
 /* --- Drive System Main State Variables --- */
@@ -157,10 +156,6 @@ float drvSys_motor_torque_command_prev = 0;
 float drvSys_joint_torque = 0.0;
 float drvSys_joint_torque_prev = 0;
 
-float drvSys_pid_sample_error = 0;
-float drvSys_pid_sample_Iterm = 0;
-float drvSys_pid_sample_dError = 0;
-
 
 // Peripheral Sensor Values
 int32_t drvSys_hall_sensor_val = 0;
@@ -183,7 +178,6 @@ TaskHandle_t drvSys_process_joint_encoder_th;
 TaskHandle_t drvSys_process_torque_sensor_th;
 TaskHandle_t drvSys_admittance_controller_th;
 TaskHandle_t drvSys_learn_dynamics_th;
-TaskHandle_t drvSys_tune_pid_th;
 TaskHandle_t drvSys_handle_periphal_sensors_th;
 
 
@@ -307,6 +301,8 @@ drvSys_FullDriveStateTimeSample drvSys_get_full_drive_state_time_samples() {
     state_data.state_prev.motor_vel = drvSys_motor_velocity_prev;
     state_data.state_prev.motor_torque = drvSys_motor_torque_command_prev;
     state_data.state_prev.joint_torque = drvSys_joint_torque_prev;
+
+    state_data.drvSys_feedback_torque = drvSys_pid_torque;
 
     return state_data;
 
@@ -459,13 +455,9 @@ void _drvSys_calibrate_with_hallsensor() {
         }
 
         // Finish Calibration 
-        if (n_falling > 2000) {
+        if (n_falling > 4000) {
             calibration_finished = true;
 
-            int32_t motor_zero_angle = raw_motor_angle;
-            drvSys_motor_encoder_offset = motor_zero_angle;
-
-            drvSys_magnetic_motor_encoder.setOffsetAngle(motor_zero_angle);
             drvSys_magnetic_joint_encoder.ProgramAbsolZeroPosition(zero_pos_joint);
             drvSys_joint_zero_set = true;
 
@@ -591,7 +583,7 @@ void _drvSys_setup_FOC_Driver() {
 void drvSys_initialize() {
 
     /* Initial Controller Gains */
-    drvSys_PID_Gains pid_gains = { .K_p = PID_GAIN_P, .K_i = PID_GAIN_I, .K_d = PID_GAIN_D, .K_vel_ff = PID_VEL_FF };
+    drvSys_PID_Gains pid_gains = { .K_p = PID_GAIN_P, .K_i = PID_GAIN_I, .K_d = PID_GAIN_D, .K_vel_ff = DRVSYS_VEL_FF_GAIN };
     drvSys_admittance_parameters drvSys_admittance_gains;
     drvSys_admittance_gains.virtual_spring = 0.0;
     drvSys_admittance_gains.virtual_damping = 0.0;
@@ -666,13 +658,6 @@ void drvSys_initialize() {
 
     drvSys_magnetic_joint_encoder.rollover_detection = true;
 
-
-    if (drvSys_joint_calibrated_flag) {
-        float current_joint_angle = drvSys_magnetic_joint_encoder.getRotationCentered(true) * encoder2Rad;
-        float current_motor_angle = drvSys_motor_encoder_dir_align * drvSys_magnetic_motor_encoder.getRotation(true) * encoder2Rad * (1.0 / drvSys_constants.transmission_ratio);
-        drvSys_motor_encoder_offset = current_motor_angle - current_joint_angle;
-
-    }
 
     // Make sure mutexes are available
     xSemaphoreGive(drvSys_mutex_joint_position);
@@ -749,6 +734,13 @@ void drvSys_initialize() {
     }
     else {
         Serial.println("DRVSYS_INFO: Drive is not fully calibrated. ");
+    }
+
+    if (drvSys_joint_calibrated_flag) {
+        float current_joint_angle = drvSys_magnetic_joint_encoder.getRotationCentered(true) * encoder2Rad;
+        float current_motor_angle = drvSys_motor_encoder_dir_align * drvSys_magnetic_motor_encoder.getRotation(true) * encoder2Rad * (1.0 / drvSys_constants.transmission_ratio);
+        drvSys_motor_encoder_offset = current_motor_angle - current_joint_angle;
+
     }
 
     // Setup interrupt timer to generate periodic sample trigger
@@ -831,9 +823,7 @@ void _drvSys_neural_controller_setup() {
     neural_controller = new NeuralController();
     neural_controller->init();
 
-
     nn_pid_initialized = true;
-    drvSys_pid_tuner_active = false;
 
     /* --- create Task --- */
     xTaskCreatePinnedToCore(
@@ -870,17 +860,12 @@ void _drvSys_learn_neural_control_task(void* parameters) {
     while (true) {
         counter++;
         //Serial.println(counter);
-        if (counter > 10) {
+        if (counter > 5) {
             nn_inv_initialized = true;
         }
 
-        if (learning_counter > 10000) {
-            drvSys_inv_dyn_control_active = false;
-        }
-
-
-        if (learning_counter > 10000) {
-            drvSys_pid_tuner_active = true;
+        if (learning_counter > 10000 || neural_controller->control_net_pretrained) {
+            drvSys_neural_control_active = true;
         }
 
 
@@ -888,15 +873,13 @@ void _drvSys_learn_neural_control_task(void* parameters) {
         drvSys_driveTargets targets = drvSys_get_targets();
         neural_controller->add_sample(sample_data, targets);
 
-        neural_controller->add_pid_sample(sample_data.state, targets, drvSys_pid_sample_error, drvSys_pid_sample_Iterm, drvSys_pid_sample_dError);
-
 
         if (counter % learn_iterations == 0) {
-            for (int i = 0; i < 10; i++) {
-                neural_controller->learning_step_emulator();
+            for (int i = 0; i < 5; i++) {
+                //neural_controller->learning_step_emulator();
+                //neural_controller->learning_step_inverse_dyn();
                 neural_controller->learning_step_controller();
                 learning_counter++;
-                neural_controller->learning_step_pid_tuner();
                 taskYIELD();
 
 
@@ -905,15 +888,6 @@ void _drvSys_learn_neural_control_task(void* parameters) {
 
         }
 
-        // Obtain Optimal Gains from NN
-        if (drvSys_pid_tuner_active && counter % 1 == 0) {
-            //Serial.println("new gains");
-            drvSys_PID_Gains gains = neural_controller->predict_optimal_gains(drvSys_get_full_drive_state(), drvSys_get_targets());
-
-
-
-            drvSys_update_PID_gains(gains);
-        }
         //
 
 //Serial.println(delta);
@@ -934,8 +908,8 @@ float drvSys_inv_dyn_nn_pred_error() {
 
 }
 
-float drvSys_inv_dyn_read_predicted_torque() {
-    return drvSys_inv_dyn_pred_torque;
+float drvSys_neural_control_read_predicted_torque() {
+    return drvSys_neural_control_pred_torque;
 }
 
 float drvSys_get_pid_torque() {
@@ -951,57 +925,113 @@ float _drvSys_neural_control_predict_torque() {
     drvSys_FullDriveState state = drvSys_get_full_drive_state();
     drvSys_driveTargets targets = drvSys_get_targets();
 
-    float predicted_torque = neural_controller->predict_control_torque(state, targets);
+    float predicted_torque_cn = neural_controller->predict_control_torque(state, targets);
+
+    //float predicted_torque_inv_part = neural_controller->inverse_dynamics_predict_torque(state, targets) - predicted_torque_inv_part;
+
+    float predicted_torque = predicted_torque_cn;
 
     return predicted_torque;
 }
 
 void drvSys_neural_control_activate(bool active) {
 
-    drvSys_inv_dyn_control_active = active;
+    drvSys_neural_control_active = active;
 }
 
-void _drvSys_nn_pid_tuner_setup() {
-
-    Serial.println("DRVSYS_INFO: Setup NN for PID Tuner");
-
-
-    //nn_pid_initialized = true;
-
-    /* --- create Task --- */
-    /*
-    xTaskCreatePinnedToCore(
-        _drvSys_nn_pid_tuner_learn_pid_tuning_task,   // function name
-        "Tune PID Task", // task name
-        DRVSYS_STACKSIZE_LEARN_PID_GAINS_TASK,      // Stack size (bytes)
-        NULL,      // task parameters
-        learn_dynamics_prio,         // task priority
-        &drvSys_tune_pid_th,
-        DRVSYS_LEARNING_CORE // task handle
-    );
-    Serial.println("DRVSYS_INFO: Succesful setup NN for PID Tuner");
-    */
-
-}
-
-void _drvSys_nn_pid_tuner_learn_pid_tuning_task(void* parameters) {
-
-    const TickType_t learning_delay = DRVSYS_LEARNING_PERIOD_MS / portTICK_PERIOD_MS;
-
-    while (true) {
-
-
-        vTaskDelay(learning_delay);
+void drvSys_adapt_nn_parameter(int nn_type, int parameter_type, float value) {
+    if (nn_type == 0) {
+        if (parameter_type == 0) { // learning rate
+            neural_controller->emulator_nn->learning_rate = value;
+            return;
+        }
+        else if (parameter_type == 1) { // max gradient
+            neural_controller->emulator_nn->max_gradient_abs = value;
+        }
+        else if (parameter_type == 2) { // min learning rate
+            neural_controller->emulator_nn->minimal_learning_rate = value;
+        }
+        else if (parameter_type == 3) { // error learning rate factor
+            neural_controller->emulator_nn->lr_error_factor = value;
+        }
+        else if (parameter_type == 4) { // maximum learning rate
+            neural_controller->emulator_nn->maximal_learning_rate = value;
+        }
+        else if (parameter_type == 5) {
+            if (value == 0.0) {
+                neural_controller->emulator_nn->lr_schedule = no_schedule;
+            }
+            else if (value == 1.0) {
+                neural_controller->emulator_nn->lr_schedule = error_adaptive;
+            }
+        }
+    }
+    if (nn_type == 1) {
+        if (parameter_type == 0) { // learning rate
+            neural_controller->controller_nn->learning_rate = value;
+            return;
+        }
+        else if (parameter_type == 1) { // max gradient
+            neural_controller->controller_nn->max_gradient_abs = value;
+        }
+        else if (parameter_type == 2) { // min learning rate
+            neural_controller->controller_nn->minimal_learning_rate = value;
+        }
+        else if (parameter_type == 3) { // error learning rate factor
+            neural_controller->controller_nn->lr_error_factor = value;
+        }
+        else if (parameter_type == 4) { // maximum learning rate
+            neural_controller->controller_nn->maximal_learning_rate = value;
+        }
+        else if (parameter_type == 5) {
+            if (value == 0.0) {
+                neural_controller->controller_nn->lr_schedule = no_schedule;
+            }
+            else if (value == 1.0) {
+                neural_controller->controller_nn->lr_schedule = error_adaptive;
+            }
+        }
     }
 }
-
-
-void drvSys_nn_pid_tuner_set_learning_rate(float lr, float lr_error_scale) {
+/**
+ * @brief
+ *
+ * @param nn_type 0 - Emulator, 1-Controller
+ * @param error_type 0 error, 1 filtered error
+ * @return float
+ */
+float drvSys_get_neural_control_error(int nn_type, int error_type) {
+    if (nn_type == 0) {
+        if (error_type == 0) {
+            return neural_controller->emulator_error;
+        }
+        if (error_type == 1) {
+            return neural_controller->average_emulator_error;
+        }
+    }
+    if (nn_type == 1) {
+        if (error_type == 0) {
+            return neural_controller->control_error;
+        }
+        if (error_type == 1) {
+            return neural_controller->average_control_error;
+        }
+    }
 
 }
-void drvSys_nn_pid_tuner_activate(bool activate) {
-    drvSys_pid_tuner_active = activate;
+
+void drvSys_neural_control_save_nets(bool reset) {
+    if (reset) {
+        neural_controller->reset_controller_network();
+        neural_controller->reset_emulator_network();
+    }
+    else {
+        neural_controller->save_controller_network();
+        neural_controller->save_emulator_network();
+    }
+
 }
+
 
 
 int32_t  drvSys_start_foc_processing() {
@@ -1129,8 +1159,7 @@ void _drvSys_setup_dual_controller() {
     drvSys_position_controller.setErrorDeadBand(DRVSYS_POS_PID_DEADBAND);
     drvSys_position_controller.derivative_on_measurement = DRVSYS_POS_PID_DERIVATIVE_ON_MEASUREMENT;
     drvSys_position_controller.setTuning(drvSys_parameter_config.pid_gains.K_p, drvSys_parameter_config.pid_gains.K_i, drvSys_parameter_config.pid_gains.K_d);
-
-
+    drvSys_position_controller.d_term_vel = false;
     _drvSys_read_pos_PID_gains_from_flash();
 
     Serial.println("DRVSYS_INFO: Setup PID Position Controller with Velocity Feedforward");
@@ -1417,21 +1446,21 @@ void _drvSys_process_encoders_task(void* parameters) {
             KinematicStateVector motor_state = motor_kinematic_kalman_filter.estimateStates(motor_pos_sensor_val);
 
             xSemaphoreTake(drvSys_mutex_motor_position, portMAX_DELAY);
-            if (counter % 2 == 0) {
+            if (counter % 1 == 0) {
                 drvSys_motor_position_prev = drvSys_motor_position;
             }
             drvSys_motor_position = motor_state.pos;
             xSemaphoreGive(drvSys_mutex_motor_position);
 
             xSemaphoreTake(drvSys_mutex_motor_vel, portMAX_DELAY);
-            if (counter % 2 == 0) {
+            if (counter % 1 == 0) {
                 drvSys_motor_velocity_prev = drvSys_motor_velocity;
             }
             drvSys_motor_velocity = motor_state.vel;
             xSemaphoreGive(drvSys_mutex_motor_vel);
 
             xSemaphoreTake(drvSys_mutex_motor_acc, portMAX_DELAY);
-            if (counter % 2 == 0) {
+            if (counter % 1 == 0) {
                 drvSys_motor_acc_prev = drvSys_motor_acc;
             }
             drvSys_motor_acc = motor_state.acc;
@@ -1446,21 +1475,21 @@ void _drvSys_process_encoders_task(void* parameters) {
             KinematicStateVector joint_state = joint_kinematic_kalman_filter.estimateStates(raw_joint_angle_rad);
 
             xSemaphoreTake(drvSys_mutex_joint_acc, portMAX_DELAY);
-            if (counter % 2 == 0) {
+            if (counter % 1 == 0) {
                 drvSys_joint_acc_prev = drvSys_joint_acc;
             }
             drvSys_joint_acc = joint_state.acc;
             xSemaphoreGive(drvSys_mutex_joint_acc);
 
             xSemaphoreTake(drvSys_mutex_joint_vel, portMAX_DELAY);
-            if (counter % 2 == 0) {
+            if (counter % 1 == 0) {
                 drvSys_joint_velocity_prev = drvSys_joint_velocity;
             }
             drvSys_joint_velocity = joint_state.vel;
             xSemaphoreGive(drvSys_mutex_joint_vel);
 
             xSemaphoreTake(drvSys_mutex_joint_position, portMAX_DELAY);
-            if (counter % 2 == 0) {
+            if (counter % 1 == 0) {
                 drvSys_joint_position_prev = drvSys_joint_position;
             }
             drvSys_joint_position = joint_state.pos;
@@ -1468,7 +1497,7 @@ void _drvSys_process_encoders_task(void* parameters) {
 
 
             //handle joint torque 
-            if (counter % 2 == 0) {
+            if (counter % 1 == 0) {
                 drvSys_joint_torque_prev = drvSys_joint_torque;
             }
 
@@ -1508,37 +1537,38 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
                 float pos_target_joint = drvSys_pos_target;
                 xSemaphoreGive(drvSys_mutex_position_command);
 
+
+                xSemaphoreTake(drvSys_mutex_joint_vel, portMAX_DELAY);
+                float actual_vel_joint = drvSys_joint_velocity;
+                xSemaphoreGive(drvSys_mutex_joint_vel);
+
+                float vel_target = drvSys_vel_target;
+
+
                 drvSys_position_controller.setSetPoint(pos_target_joint, false);
 
                 drvSys_position_controller.input = actual_pos_joint;
                 drvSys_position_controller.compute();
 
-
+                /*
                 float torque_ff = 0;
                 static float prev_torque_ff = 0;
-                if (drvSys_inv_dyn_control_active) {
-                    drvSys_inv_dyn_pred_torque = _drvSys_neural_control_predict_torque();
-                    torque_ff = drvSys_inv_dyn_pred_torque;
-
-                    torque_ff = torque_ff * 0.95 + (1.0 - 0.95) * prev_torque_ff;
-                    prev_torque_ff = torque_ff;
+                if (drvSys_neural_control_active) {
+                    drvSys_neural_control_pred_torque = _drvSys_neural_control_predict_torque();
+                    torque_ff = drvSys_neural_control_pred_torque;
                 }
+                */
+
+
 
 
                 /* Handle controller output */
 
-                drvSys_pid_torque = drvSys_position_controller.output + drvSys_vel_target * drvSys_vel_ff_gain;
+                drvSys_pid_torque = drvSys_position_controller.output;
 
-                float motor_torque_target = drvSys_pid_torque + torque_ff;
+                float motor_torque_target = drvSys_pid_torque + drvSys_vel_target * drvSys_vel_ff_gain + drvSys_acc_target * drvSys_acc_ff_gain;
 
                 _drvSys_set_target_torque(motor_torque_target);
-
-                if (nn_pid_initialized) {
-                    drvSys_pid_sample_error = drvSys_pid_sample_error;
-                    drvSys_pid_sample_Iterm = drvSys_pid_sample_Iterm;
-                    drvSys_pid_sample_dError = drvSys_pid_sample_dError;
-                }
-
 
 
             }
@@ -1553,7 +1583,13 @@ void _drvSys_torque_controller_task(void* parameters) {
     TIMERG0.wdt_wprotect = 0;
     uint32_t torque_controller_processing_thread_notification;
 
-    float inv_dyn_control_torque = 0;
+    //const float frequ_limit = 1.0 / (2.0 * DRVSYS_CONTROL_TORQUE_PERIOD_US * 1e-6);
+
+    const float frequ_limit = 200;
+    const float torque_ff_alpha = 1 - exp(-DRVSYS_CONTROL_TORQUE_PERIOD_US * 1e-6 / (1.0 / frequ_limit));
+    static float prev_torque_ff = 0;
+    float torque_ff = 0;
+
 
     while (true) {
         torque_controller_processing_thread_notification = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
@@ -1562,7 +1598,17 @@ void _drvSys_torque_controller_task(void* parameters) {
 
             xSemaphoreTake(drvSys_mutex_motor_commanded_torque, portMAX_DELAY);
             drvSys_motor_torque_command_prev = drvSys_motor_torque_commanded;
-            drvSys_motor_torque_commanded = _drvSys_torque_target + drvSys_torque_ff;
+
+
+            if (drvSys_neural_control_active) {
+                drvSys_neural_control_pred_torque = _drvSys_neural_control_predict_torque();
+                torque_ff = torque_ff_alpha * drvSys_neural_control_pred_torque + (1.0 - torque_ff_alpha) * prev_torque_ff;
+                drvSys_neural_control_pred_torque = torque_ff;
+                prev_torque_ff = torque_ff;
+            }
+
+
+            drvSys_motor_torque_commanded = _drvSys_torque_target + drvSys_torque_ff + torque_ff;
 
             // Apply Notch Filters to avoid resonance frequencies
 
@@ -1702,20 +1748,14 @@ void _drvSys_monitor_system_task(void* parameters) {
     }
 }
 
-void drvSys_update_PID_gains(drvSys_PID_Gains gains) {
+void drvSys_update_PID_gains(drvSys_PID_Gains new_gains) {
 
-    drvSys_PID_Gains new_gains;
 
     // Write them to overall Drive System parameters
 
-    // Filter gain changes
-    new_gains.K_p = abs(drvSys_parameter_config.pid_gains.K_p * 0.5 + 0.5 * gains.K_p);
-    new_gains.K_i = abs(drvSys_parameter_config.pid_gains.K_i * 0.5 + 0.5 * gains.K_i);
-    new_gains.K_d = abs(drvSys_parameter_config.pid_gains.K_d * 0.5 + 0.5 * gains.K_d);
-
     drvSys_parameter_config.pid_gains = new_gains;
 
-    drvSys_vel_ff_gain = gains.K_vel_ff;
+    drvSys_vel_ff_gain = new_gains.K_vel_ff;
 
     // Write them to controller instance
     drvSys_position_controller.setTuning(new_gains.K_p, new_gains.K_i, new_gains.K_d);
@@ -2027,7 +2067,7 @@ void drvSys_calibrate_FOC() {
 
     while (!calibration_finished) {
         drvSys_foc_controller.set_target_torque(DRVSYS_TORQUE_CONSTANT * 0.8);
-        vTaskDelay(150 / portTICK_PERIOD_MS);
+        vTaskDelay(300 / portTICK_PERIOD_MS);
 
         int N_samples = 300;
         float forward_vel = 0.0;
@@ -2050,7 +2090,7 @@ void drvSys_calibrate_FOC() {
 
         drvSys_foc_controller.set_target_torque(-DRVSYS_TORQUE_CONSTANT * 0.8);
 
-        vTaskDelay(150 / portTICK_PERIOD_MS);
+        vTaskDelay(300 / portTICK_PERIOD_MS);
 
         float backward_vel = 0.0;
         for (int i = 0; i < N_samples; i++) {
