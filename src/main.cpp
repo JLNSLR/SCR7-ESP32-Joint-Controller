@@ -125,7 +125,7 @@ void loop()
 
   counter++;
 
-  /*
+
   if (counter % 500 == 0) {
 
     if (!motion_planner.executing_traj_flag) {
@@ -141,7 +141,7 @@ void loop()
 
 
   }
-  */
+
 
 
   /*
