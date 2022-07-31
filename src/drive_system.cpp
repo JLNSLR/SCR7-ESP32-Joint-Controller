@@ -47,7 +47,6 @@ const drvSys_Constants drvSys_constants = { .nominal_current_mA = DRVSYS_PHASE_C
 
 
 
-
 /*######## Changing Parameter Initial Parameters ####### */
 /* Drive System Control Mode */
 drvSys_controlMode drvSys_mode = closed_loop_foc;
@@ -162,12 +161,10 @@ int32_t drvSys_hall_sensor_val = 0;
 float drvSys_motor_temperature = 20.0;
 
 
-/* Notch Filters */
+/* Notch Filter */
 
 drvSys_notch_filter_params drvSys_notch_filters;
-
-IIRFilter<2> notch_filter_0;
-IIRFilter<2> notch_filter_1;
+float notch_b_coefs[3] = { 0 };
 
 //define Task Handlers
 TaskHandle_t drvSys_foc_th;
@@ -181,9 +178,7 @@ TaskHandle_t drvSys_learn_dynamics_th;
 TaskHandle_t drvSys_handle_periphal_sensors_th;
 
 
-
 const float encoder2Rad = PI / 8192.0;
-
 
 
 /* #############################################################
@@ -217,16 +212,12 @@ const char* drvSys_encoder_offset = "posOffset";
 const char* drvSys_alignment_setting = "align";
 const char* drvSys_saved_offsets = "offs";
 
-//Estimated Parameters
-const char* drvSys_dynamic_params = "dynParams";
-
 
 /* ###############################################################
 ##################################################################
 ################## Function Implementations ######################
 ##################################################################
 ################################################################ */
-
 
 
 const drvSys_driveState drvSys_get_drive_state() {
@@ -363,7 +354,6 @@ void _drvSys_calibrate_with_hallsensor() {
     float limit_angle = DRVSYS_CAL_ANGLE_LIMIT;
 
     word zero_pos_joint = 0;
-    int32_t raw_motor_angle = 0;
 
     const int buffer_size = 50;
     CircularBuffer<float, buffer_size> buffer;
@@ -419,7 +409,6 @@ void _drvSys_calibrate_with_hallsensor() {
         if (current_average_val > average_hall_value + average_noise_val * noise_multiplier) {
             if (current_average_val > largest_hall_value) {
 
-                raw_motor_angle = drvSys_magnetic_motor_encoder.getRawRotation(true);
                 zero_pos_joint = drvSys_magnetic_joint_encoder.getRawRotation(true);
 
                 noise_multiplier = 1;
@@ -684,35 +673,11 @@ void drvSys_initialize() {
     // TO DO
 
 
-    // Initialize Kinematic Kalman Filters 
-
-    motor_kinematic_kalman_filter.init(DRVSYS_PROCESS_ENCODERS_PERIOD_US * 1e-6);
-    joint_kinematic_kalman_filter.init(DRVSYS_PROCESS_ENCODERS_PERIOD_US * 1e-6);
-
-
-    joint_kinematic_kalman_filter.setAccelChange(DRVSYS_KIN_KALMAN_JOINT_ACCELERATION_STD);
-    motor_kinematic_kalman_filter.setAccelChange(DRVSYS_KIN_KALMAN_MOTOR_ACCELERATION_STD);
-
-    // Initialize Notch Filters
-    drvSys_notch_filters.notch_0_active = DRVSYS_NOTCH_0_ACTIVE;
-    drvSys_notch_filters.notch_1_active = DRVSYS_NOTCH_1_ACTIVE;
-    drvSys_notch_filters.notch_bw_0 = DRVSYS_NOTCH_0_BW; //Hz
-    drvSys_notch_filters.notch_frequ_0 = DRVSYS_NOTCH_0_FREQU; //Hz
-    drvSys_notch_filters.notch_bw_1 = DRVSYS_NOTCH_1_BW; //Hz
-    drvSys_notch_filters.notch_frequ_1 = DRVSYS_NOTCH_1_FREQU; //Hz
-
-
-    drvSys_set_notch_filters(0, drvSys_notch_filters.notch_frequ_0,
-        drvSys_notch_filters.notch_bw_0, drvSys_notch_filters.notch_0_active);
-    drvSys_set_notch_filters(1, drvSys_notch_filters.notch_frequ_1,
-        drvSys_notch_filters.notch_bw_1, drvSys_notch_filters.notch_1_active);
-
+    /* Initialize Hall Sensor for Calibration */
+    pinMode(HALL_SENSOR_PIN, INPUT);
 
     // Setup FOC Driver
     _drvSys_setup_FOC_Driver();
-
-    /* Initialize Hall Sensor for Calibration */
-    pinMode(HALL_SENSOR_PIN, INPUT);
 
 #ifdef ALLOW_ENCODER_CALIBRATION_ROUTINE
     if (drvSys_joint_calibrated_flag == false) {
@@ -743,6 +708,43 @@ void drvSys_initialize() {
 
     }
 
+    // Initialize Kinematic Kalman Filters 
+    motor_kinematic_kalman_filter.init(DRVSYS_PROCESS_ENCODERS_PERIOD_US * 1e-6);
+    joint_kinematic_kalman_filter.init(DRVSYS_PROCESS_ENCODERS_PERIOD_US * 1e-6);
+
+    joint_kinematic_kalman_filter.setAccelChange(DRVSYS_KIN_KALMAN_JOINT_ACCELERATION_STD);
+    motor_kinematic_kalman_filter.setAccelChange(DRVSYS_KIN_KALMAN_MOTOR_ACCELERATION_STD);
+
+
+    xTaskCreatePinnedToCore(
+        _drvSys_process_encoders_task,   // function name
+        "Process_encoder_task", // task name
+        DRVSYS_STACKSIZE_PROCESS_ENCODER_TASK,      // Stack size (bytes)
+        NULL,      // task parameters
+        process_sensor_prio,         // task priority
+        &drvSys_process_encoders_th,
+        DRVSYS_ENCODER_CORE // task handle
+    );
+
+
+
+
+    //if initialization was succesful:
+    drvSys_state_flag = ready;
+
+    drvSys_initialize_foc_based_control();
+
+
+};
+
+void drvSys_initialize_foc_based_control() {
+    // Initialize Notch Filters
+    drvSys_notch_filters.notch_active = DRVSYS_NOTCH_ACTIVE;
+    drvSys_notch_filters.notch_frequ = DRVSYS_NOTCH_FREQU; //Hz
+
+    drvSys_set_notch_filter(drvSys_notch_filters.notch_frequ, drvSys_notch_filters.notch_active);
+
+
     // Setup interrupt timer to generate periodic sample trigger
     _drvSys_setup_interrupts();
 
@@ -757,15 +759,6 @@ void drvSys_initialize() {
         DRVSYS_FOC_CORE // task handle
     );
 
-    xTaskCreatePinnedToCore(
-        _drvSys_process_encoders_task,   // function name
-        "Process_encoder_task", // task name
-        DRVSYS_STACKSIZE_PROCESS_ENCODER_TASK,      // Stack size (bytes)
-        NULL,      // task parameters
-        process_sensor_prio,         // task priority
-        &drvSys_process_encoders_th,
-        DRVSYS_ENCODER_CORE // task handle
-    );
 
     xTaskCreatePinnedToCore(_drvSys_torque_controller_task,
         "Torque_Controller_Task",
@@ -802,19 +795,11 @@ void drvSys_initialize() {
         DRVSYS_ADMITTANCE_CORE // task handle
     );
 
+    _drvSys_neural_controller_setup();
+
     //suspend task until controller is started
     vTaskSuspend(drvSys_admittance_controller_th);
-
-
-
-
-    //if initialization was succesful:
-    drvSys_state_flag = ready;
-
-
-
-
-};
+}
 
 void _drvSys_neural_controller_setup() {
 
@@ -822,8 +807,6 @@ void _drvSys_neural_controller_setup() {
 
     neural_controller = new NeuralController();
     neural_controller->init();
-
-    nn_pid_initialized = true;
 
     /* --- create Task --- */
     xTaskCreatePinnedToCore(
@@ -841,6 +824,13 @@ void _drvSys_neural_controller_setup() {
 
 }
 
+void drvSys_initialize_stepper_based_control() {
+    drvSys_controller_state.control_mode = stepper_mode;
+
+
+
+
+}
 
 
 drvSys_driveState drvSys_get_emulator_pred() {
@@ -854,43 +844,40 @@ void _drvSys_learn_neural_control_task(void* parameters) {
 
     static long counter = 0;
     const TickType_t learning_delay = DRVSYS_LEARNING_PERIOD_MS / portTICK_PERIOD_MS;
-    const int learn_iterations = 10;
-    int learning_counter = 0;
+    const int learn_iterations = 5;
+    static long learning_counter = 0;
+
+    const int minimum_learning_iterations = 10000;
 
     while (true) {
-        counter++;
-        //Serial.println(counter);
-        if (counter > 5) {
-            nn_inv_initialized = true;
-        }
 
-        if (learning_counter > 10000 || neural_controller->control_net_pretrained) {
-            drvSys_neural_control_active = true;
-        }
+        if (drvSys_controller_state.control_mode == closed_loop_foc && drvSys_controller_state.state_flag == closed_loop_control_active) {
+            counter++;
+            if (counter > 10) {
 
 
-        drvSys_FullDriveStateTimeSample sample_data = drvSys_get_full_drive_state_time_samples();
-        drvSys_driveTargets targets = drvSys_get_targets();
-        neural_controller->add_sample(sample_data, targets);
-
-
-        if (counter % learn_iterations == 0) {
-            for (int i = 0; i < 5; i++) {
-                //neural_controller->learning_step_emulator();
-                //neural_controller->learning_step_inverse_dyn();
-                neural_controller->learning_step_controller();
-                learning_counter++;
-                taskYIELD();
-
-
+                if (learning_counter > minimum_learning_iterations || neural_controller->control_net_pretrained) {
+                    drvSys_neural_control_active = true;
+                }
             }
 
 
+            drvSys_FullDriveStateTimeSample sample_data = drvSys_get_full_drive_state_time_samples();
+            drvSys_driveTargets targets = drvSys_get_targets();
+            neural_controller->add_sample(sample_data, targets);
+
+
+            if (counter % learn_iterations == 0) {
+                for (int i = 0; i < 5; i++) {
+                    //neural_controller->learning_step_emulator();
+                    //neural_controller->learning_step_inverse_dyn();
+                    neural_controller->learning_step_controller();
+                    learning_counter++;
+                    taskYIELD();
+                }
+
+            }
         }
-
-        //
-
-//Serial.println(delta);
 
         vTaskDelay(learning_delay);
     }
@@ -900,13 +887,6 @@ void drvSys_inv_dyn_nn_set_max_learning_iterations_per_step(unsigned int n_itera
     drvSys_max_learning_iterations_per_step = n_iterations;
 }
 
-void drvSys_neural_control_set_learning_rate(float lr, float lr_error_scale) {
-
-}
-float drvSys_inv_dyn_nn_pred_error() {
-
-
-}
 
 float drvSys_neural_control_read_predicted_torque() {
     return drvSys_neural_control_pred_torque;
@@ -1017,7 +997,7 @@ float drvSys_get_neural_control_error(int nn_type, int error_type) {
             return neural_controller->average_control_error;
         }
     }
-
+    return 0;
 }
 
 void drvSys_neural_control_save_nets(bool reset) {
@@ -1091,7 +1071,7 @@ int32_t  drvSys_start_foc_processing() {
 
 //flag start foc controller
     Serial.println("DRVSYS_INFO: FOC Direct Torque Controller is now active.");
-    drvSys_controller_state.state_flag = foc_direct_torque;
+    drvSys_controller_state.state_flag = closed_loop_control_inactive;
 
     return 1;
 };
@@ -1107,7 +1087,7 @@ int32_t drvSys_start_motion_control(drvSys_controlMode control_mode) {
 
     }
 
-    if (drvSys_controller_state.state_flag == closed_loop_control_inactive || drvSys_controller_state.state_flag == foc_direct_torque) {
+    if (drvSys_controller_state.state_flag == closed_loop_control_inactive) {
 
         Serial.println("DRVSYS_INFO: Start Closed Loop Motion Control.");
         drvSys_mode = control_mode;
@@ -1115,6 +1095,7 @@ int32_t drvSys_start_motion_control(drvSys_controlMode control_mode) {
 
         switch (drvSys_mode) {
         case closed_loop_foc:
+
             _drvSys_setup_dual_controller();
             break;
 
@@ -1124,6 +1105,9 @@ int32_t drvSys_start_motion_control(drvSys_controlMode control_mode) {
 
         case admittance_control:
             _drvSys_setup_admittance_controller();
+            break;
+        case stepper_mode:
+            //
             break;
         default:
             _drvSys_setup_dual_controller();
@@ -1167,9 +1151,6 @@ void _drvSys_setup_dual_controller() {
     drvSys_position_controller.setMode(PID_MODE_ACTIVE);
     drvSys_torque_ff = 0.0;
 
-    /* Start Learning Systems */
-
-    _drvSys_neural_controller_setup();
     //_drvSys_nn_pid_tuner_setup();
 
     Serial.println("DRVSYS_INFO: Initialized Neural Networks to learn System Dynamics");
@@ -1184,8 +1165,11 @@ void drvSys_stop_controllers() {
 
     //deactivate inverse dynamics controller
     //...
-
     drvSys_controller_state.state_flag = closed_loop_control_inactive;
+
+    if (drvSys_controller_state.control_mode == stepper_mode) {
+        // stop stepper mode
+    }
 
     vTaskSuspend(drvSys_admittance_controller_th);
 
@@ -1213,61 +1197,49 @@ void drvSys_set_ff_gains(float gain) {
 
 }
 
-void drvSys_set_notch_filters(int filter_id, float notch_frequ, float bandwidth_f, bool activate) {
+void drvSys_set_notch_filter(float notch_frequ, bool activate) {
 
     // Calculate coefficients
 
-    //bandwidth
     float sample_frequ = DRVSYS_CONTROL_TORQUE_FREQU;
-    float omega_bw = 2.0 * PI * bandwidth_f / sample_frequ;
-    float a_bw = exp(omega_bw);
 
     // notch frequency
     float omega_c = 2.0 * PI * notch_frequ / sample_frequ;
 
     // Coefficients
-    float a_0 = 1.0;
-    float a_1 = 2.0 * a_bw * cos(omega_c);
-    float a_2 = -a_bw * a_bw;
 
-    float coefs_a[3] = { a_0,a_1,a_2 };
+    float divisor = 2 - 2 * cos(omega_c);
 
-    float b_0 = 1.0;
-    float b_1 = -2.0 * cos(omega_c);
-    float b_2 = 1.0;
+    float b_0 = 1.0 / divisor;
+    float b_1 = -2.0 * cos(omega_c) / divisor;
+    float b_2 = 1 / divisor;
 
-    float coefs_b[3] = { b_0, b_1, b_2 };
-
-
-    if (filter_id == 0) {
-        notch_filter_0.setCoefficients(coefs_a, coefs_b);
-
-        if (activate) {
-            drvSys_notch_filters.notch_0_active = true;
-        }
-
-    }
-    if (filter_id == 1) {
-
-        notch_filter_1.setCoefficients(coefs_a, coefs_b);
-
-        if (activate) {
-            drvSys_notch_filters.notch_1_active = true;
-        }
-
-    }
+    notch_b_coefs[0] = b_0;
+    notch_b_coefs[1] = b_1;
+    notch_b_coefs[2] = b_2;
 
     xSemaphoreTake(glob_Serial_mutex, portMAX_DELAY);
-    Serial.print("DRVSYS_INFO: Set up Notch Filter ");
-    Serial.print(filter_id);
+    Serial.print("DRVSYS_INFO: Set up Notch Filter");
     Serial.print(" with f_c = ");
-    Serial.print(notch_frequ);
-    Serial.print(", bw = ");
-    Serial.println(bandwidth_f);
+    Serial.println(notch_frequ);
     xSemaphoreGive(glob_Serial_mutex);
 
 
 };
+
+float _drvSys_compute_notch_FIR_filter(float input, float* b_coef) {
+
+    static float prev_input[2] = { 0 };
+
+    float output = input * b_coef[0] + b_coef[1] * prev_input[0] + prev_input[1] * b_coef[2];
+
+    prev_input[1] = prev_input[0];
+    prev_input[0] = input;
+
+
+    return output;
+
+}
 
 float _drvSys_check_joint_limit(float input) {
 
@@ -1379,14 +1351,18 @@ void IRAM_ATTR _drvSys_on_foc_timer() {
     tickCount++;
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-    if (tickCount % drvSys_timer_foc_ticks == 0) { // react every 200us ->5kHz
-        vTaskNotifyGiveFromISR(drvSys_foc_th, &xHigherPriorityTaskWoken);
-    }
+
     if (tickCount % drvSys_timer_encoder_process_ticks == 0) { //react every 250us
         vTaskNotifyGiveFromISR(drvSys_process_encoders_th, &xHigherPriorityTaskWoken);
     }
-    if (tickCount % drvSys_timer_torque_control_ticks == 0) {
-        vTaskNotifyGiveFromISR(drvSys_torque_controller_th, &xHigherPriorityTaskWoken);
+
+    if (drvSys_controller_state.control_mode != stepper_mode) {
+        if (tickCount % drvSys_timer_foc_ticks == 0) { // react every 200us ->5kHz
+            vTaskNotifyGiveFromISR(drvSys_foc_th, &xHigherPriorityTaskWoken);
+        }
+        if (tickCount % drvSys_timer_torque_control_ticks == 0) {
+            vTaskNotifyGiveFromISR(drvSys_torque_controller_th, &xHigherPriorityTaskWoken);
+        }
     }
 
     if (drvSys_controller_state.state_flag == closed_loop_control_active) {
@@ -1410,6 +1386,8 @@ void _drvSys_foc_controller_task(void* parameters) {
     TIMERG0.wdt_wprotect = TIMG_WDT_WKEY_VALUE;
     TIMERG0.wdt_feed = 1;
     TIMERG0.wdt_wprotect = 0;
+
+
 
     while (true) {
 
@@ -1439,7 +1417,13 @@ void _drvSys_process_encoders_task(void* parameters) {
 
             /* use Kalman Filter */
 
-            float motor_pos_sensor_val = drvSys_motor_encoder_dir_align * drvSys_magnetic_motor_encoder.last_sample * encoder2Rad * inverse_transmission;
+            float motor_pos_sensor_val;
+            if (drvSys_controller_state.control_mode == stepper_mode) {
+                motor_pos_sensor_val = drvSys_motor_encoder_dir_align * drvSys_magnetic_motor_encoder.getRotation(true) * encoder2Rad * inverse_transmission;
+            }
+            else {
+                motor_pos_sensor_val = drvSys_motor_encoder_dir_align * drvSys_magnetic_motor_encoder.last_sample * encoder2Rad * inverse_transmission;
+            }
 
             motor_pos_sensor_val = motor_pos_sensor_val - drvSys_motor_encoder_offset;
 
@@ -1537,29 +1521,10 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
                 float pos_target_joint = drvSys_pos_target;
                 xSemaphoreGive(drvSys_mutex_position_command);
 
-
-                xSemaphoreTake(drvSys_mutex_joint_vel, portMAX_DELAY);
-                float actual_vel_joint = drvSys_joint_velocity;
-                xSemaphoreGive(drvSys_mutex_joint_vel);
-
-                float vel_target = drvSys_vel_target;
-
-
                 drvSys_position_controller.setSetPoint(pos_target_joint, false);
 
                 drvSys_position_controller.input = actual_pos_joint;
                 drvSys_position_controller.compute();
-
-                /*
-                float torque_ff = 0;
-                static float prev_torque_ff = 0;
-                if (drvSys_neural_control_active) {
-                    drvSys_neural_control_pred_torque = _drvSys_neural_control_predict_torque();
-                    torque_ff = drvSys_neural_control_pred_torque;
-                }
-                */
-
-
 
 
                 /* Handle controller output */
@@ -1585,7 +1550,7 @@ void _drvSys_torque_controller_task(void* parameters) {
 
     //const float frequ_limit = 1.0 / (2.0 * DRVSYS_CONTROL_TORQUE_PERIOD_US * 1e-6);
 
-    const float frequ_limit = 200;
+    const float frequ_limit = DRVSYS_NN_CONTROL_BANDWIDTH;
     const float torque_ff_alpha = 1 - exp(-DRVSYS_CONTROL_TORQUE_PERIOD_US * 1e-6 / (1.0 / frequ_limit));
     static float prev_torque_ff = 0;
     float torque_ff = 0;
@@ -1607,23 +1572,14 @@ void _drvSys_torque_controller_task(void* parameters) {
                 prev_torque_ff = torque_ff;
             }
 
-
             drvSys_motor_torque_commanded = _drvSys_torque_target + drvSys_torque_ff + torque_ff;
 
-            // Apply Notch Filters to avoid resonance frequencies
+            // Apply Notch Filter to avoid resonance frequency
 
-            /*
-            if (drvSys_notch_filters.notch_0_active) {
-                notch_filter_0.setInput(drvSys_motor_torque_commanded);
-                notch_filter_0.compute();
-                drvSys_motor_torque_commanded = notch_filter_0.output;
+            if (drvSys_notch_filters.notch_active) {
+                drvSys_motor_torque_commanded = _drvSys_compute_notch_FIR_filter(drvSys_motor_torque_commanded, notch_b_coefs);
             }
-            if (drvSys_notch_filters.notch_1_active) {
-                notch_filter_1.setInput(drvSys_motor_torque_commanded);
-                notch_filter_1.compute();
-                drvSys_motor_torque_commanded = notch_filter_1.output;
-            }
-            */
+
             drvSys_motor_torque_commanded = _drvSys_check_joint_limit(drvSys_motor_torque_commanded);
             drvSys_foc_controller.set_target_torque(drvSys_motor_torque_commanded);
             xSemaphoreGive(drvSys_mutex_motor_commanded_torque);
@@ -1736,12 +1692,9 @@ void _drvSys_monitor_system_task(void* parameters) {
 
         if (sensor_difference * RAD2DEG < DRVSYS_SENSOR_MAX_DIFFERENCE_DEG && drvSys_controller_state.state_flag == error) {
 
-            drvSys_controller_state.state_flag = foc_direct_torque;
             //Recover from error
-
             error_iterations = 0;
         }
-
 
 
         vTaskDelay(monitoring_delay);

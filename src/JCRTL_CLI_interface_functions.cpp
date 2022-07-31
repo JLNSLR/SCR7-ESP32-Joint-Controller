@@ -30,60 +30,15 @@ bool jctrl_cli_process_torque_command(char(*cli_arg)[N_MAX_ARGS]) {
     if (strcmp(keyword, "torque") == 0 || strcmp(keyword, "t") == 0) {
         processed = true;
 
-        if (strcmp(cli_arg[1], "notch") == 0) {
-
-            bool active = atoi(cli_arg[2]);
-
-            int filter_id = atoi(cli_arg[3]);
-
-            float frequ = atof(cli_arg[4]);
-
-            float bandwidth = atof(cli_arg[5]);
-
-            if (bandwidth == 0 || frequ == 0) {
-                error = true;
-            }
-
-            if (filter_id > 1) {
-
-                _jctrl_cli_feedback_output("Notch Filer ID not valid.");
-
-                error = true;
-            }
-            if (frequ > 1000.0 || frequ < 0) {
-                _jctrl_cli_feedback_output("Notch Filer ID not valid.");
-                error = true;
-            }
-            if (bandwidth > 1000) {
-                _jctrl_cli_feedback_output("Notch Filter bandwidth not valid");
-                error = true;
-            }
-
-            if (!error) {
-                drvSys_set_notch_filters(filter_id, frequ, bandwidth, active);
-
-                if (active) {
-                    _jctrl_cli_feedback_output("Notch Filter activated.");
-                }
-                else {
-                    _jctrl_cli_feedback_output("Notch Filter deactivated.");
-                }
-                return processed;
-            }
-        }
-        else {
-
             float target_torque;
             if (strcmp(cli_arg[1], "ff") == 0) {
                 target_torque = atof(cli_arg[2]);
             }
             target_torque = atof(cli_arg[1]);
 
-
             _jctrl_cli_feedback_output("Torque command: " + String(target_torque) + " Nm.");
             _drvSys_set_target_torque(target_torque);
             return processed;
-        }
     }
 
     return processed;
@@ -181,7 +136,7 @@ bool jctrl_cli_process_drive_sys_command(char(*cli_arg)[N_MAX_ARGS]) {
 
         drvSys_controllerCondition state = drvSys_get_controllerState();
 
-        if (state.state_flag == foc_direct_torque || state.state_flag == closed_loop_control_inactive) {
+        if (state.state_flag == closed_loop_control_inactive) {
 
             if (mode == 0) {
                 drvSys_start_motion_control(closed_loop_foc);

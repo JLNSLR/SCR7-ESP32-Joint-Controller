@@ -6,7 +6,10 @@ NeuralController::NeuralController() {
 };
 
 void NeuralController::init() {
+mutex_training_buffer = xSemaphoreCreateBinary();
+xSemaphoreGive(mutex_training_buffer);
 
+#ifdef EMULATOR
     emulator_nn = new NeuralNetwork(emulator_depth, emulator_width, emulator_act);
     emulator_nn->loss_type = huber_loss;
     emulator_nn->learning_rate = 1e-4;
@@ -21,11 +24,8 @@ void NeuralController::init() {
     emulator_nn->reg_penalty_factor = 1e-4;
 
 
-    mutex_training_buffer = xSemaphoreCreateBinary();
+    
     mutex_emulator = xSemaphoreCreateBinary();
-
-    xSemaphoreGive(mutex_emulator);
-    xSemaphoreGive(mutex_training_buffer);
 
     //load weights from Flash
     nn_model_weights emulator_weights = nn_load_model_weights_from_flash(emulator_name, emulator_nn->n_weights);
@@ -35,19 +35,21 @@ void NeuralController::init() {
         Serial.println("DRVSYS_NN_INFO: Loaded Weights for Emulator Network from Flash");
     }
 
+#endif
+
 
     // Initializing neural controller
 
     controller_nn = new NeuralNetwork(controller_depth, controller_width, controller_act);
     controller_nn->loss_type = MSE;
     controller_nn->learning_rate = 0.5e-3;
-    controller_nn->lr_schedule = no_schedule;
+    controller_nn->lr_schedule = error_adaptive;
     controller_nn->update_rule = adam;
     controller_nn->lr_error_factor = 1e-4;
-    controller_nn->minimal_learning_rate = 1e-4;
-    controller_nn->maximal_learning_rate = 1e-2;
+    controller_nn->minimal_learning_rate = 1e-5;
+    controller_nn->maximal_learning_rate = 0.5e-2;
     controller_nn->init_weights_randomly(0.005, -0.005);
-    controller_nn->max_gradient_abs = 0.1;
+    controller_nn->max_gradient_abs = 1.0;
     controller_nn->regularization = none;
     controller_nn->reg_penalty_factor = 1e-4;
 
@@ -67,6 +69,7 @@ void NeuralController::init() {
     }
 
 
+#ifdef INVERSE_DYN
     xSemaphoreGive(mutex_controller);
 
     // Initializing neural controller
@@ -98,11 +101,9 @@ void NeuralController::init() {
         Serial.println("DRVSYS_NN_INFO: Loaded Weights for Inverse Dynamics from Flash");
     }
 
-
     xSemaphoreGive(mutex_inv_dyn);
     */
-
-    xSemaphoreGive(mutex_inv_dyn);
+#endif
 
 }
 
@@ -120,6 +121,11 @@ void NeuralController::add_sample(drvSys_FullDriveStateTimeSample sample, drvSys
 
 
 void NeuralController::learning_step_emulator() {
+
+#ifndef EMULATOR
+    return;
+
+#endif // !EMULATOR
 
     if (training_buffer.isEmpty()) {
         return;
@@ -144,15 +150,6 @@ void NeuralController::learning_step_emulator() {
         output[0] = current_sample.data.joint_pos_next;
         output[1] = current_sample.data.joint_vel_next;
         output[2] = current_sample.data.joint_acc_next;
-
-        /*
-        Serial.println("sample check ---");
-        Serial.println(current_sample.data.joint_pos);
-        Serial.println(current_sample.data.joint_pos_next);
-        Serial.println(input[0]);
-        Serial.println(output[0]);
-        Serial.println("---");
-        */
 
         xSemaphoreTake(mutex_emulator, portMAX_DELAY);
         emulator_error = emulator_nn->train_SGD(input, output);
@@ -269,11 +266,6 @@ void NeuralController::learning_step_controller() {
         xSemaphoreGive(mutex_training_buffer);
 
 
-        // simulate system output  
-
-        float epsilon = 1e-4;
-
-
         float input_vector[10];
         input_vector[0] = sample.state_sample.state_prev.joint_pos * inv_max_angle;
         input_vector[1] = sample.state_sample.state_prev.joint_vel * inv_max_vel;
@@ -291,45 +283,8 @@ void NeuralController::learning_step_controller() {
         xSemaphoreTake(mutex_controller, portMAX_DELAY);
 
         float output_torque_norm = *controller_nn->predict(input_vector);
-        /*
 
-        drvSys_FullDriveState state_plus_epsilon = sample.state_sample.state_prev;
-        state_plus_epsilon.motor_torque = output_torque + epsilon;
-
-        drvSys_FullDriveState state_min_epsilon = sample.state_sample.state_prev;
-        state_min_epsilon.motor_torque = output_torque - epsilon;
-
-        drvSys_driveState output_state_plus_epsilon = emulator_predict_next_state(state_plus_epsilon);
-        drvSys_driveState output_state_min_epsilon = emulator_predict_next_state(state_min_epsilon);
-        drvSys_FullDriveState state_sim = sample.state_sample.state_prev;
-        state_sim.motor_torque = output_torque;
-        drvSys_driveState emulator_out = emulator_predict_next_state(state_sim);
-
-        float dpos_du = (output_state_plus_epsilon.joint_pos - output_state_min_epsilon.joint_pos) / (2.0 * epsilon);
-        float dvel_du = (output_state_plus_epsilon.joint_vel - output_state_min_epsilon.joint_vel) / (2.0 * epsilon);
-
-
-
-        float pos_error = emulator_out.joint_pos - sample.target_sample.pos_target;
-        float vel_error = emulator_out.joint_vel - sample.target_sample.vel_target;
-
-        control_error = (pos_error * pos_error) * 0.5;
-
-        float bound_derivative = 0;
-
-        if (output_torque > max_motor_torque) {
-            bound_derivative = 100;
-        }
-        else if (output_torque < -max_motor_torque) {
-            bound_derivative = -100;
-        }
-
-
-
-        float derror_du = -pos_error * dpos_du * inv_max_angle + 0.1 * -vel_error * dvel_du * inv_max_vel + 0.1 * output_torque * inv_max_motor_torque;
-        */
-
-        float derror_du = -sample.state_sample.drvSys_feedback_torque * inv_max_motor_torque + output_torque_norm * 0.75;
+        float derror_du = -10000*sample.state_sample.drvSys_feedback_torque * inv_max_motor_torque + output_torque_norm * control_effort_penalty + -control_error*10 ;
 
         controller_nn->backpropagation(input_vector, control_error, &derror_du);
 
@@ -346,7 +301,6 @@ void NeuralController::learning_step_controller() {
 float NeuralController::predict_control_torque(drvSys_FullDriveState current_state, drvSys_driveTargets targets) {
 
     static float last_pred = 0;
-
     float pred_torque = 0;
 
     float input[10];
@@ -378,6 +332,10 @@ float NeuralController::predict_control_torque(drvSys_FullDriveState current_sta
 }
 
 void NeuralController::learning_step_inverse_dyn() {
+
+#ifndef INVERSE_DYNAMICS
+    return;
+#endif // !INVERSE_DYNAMICS
     if (training_buffer.isEmpty()) {
         return;
     }
@@ -403,7 +361,7 @@ void NeuralController::learning_step_inverse_dyn() {
         float output = sample.state_sample.state_prev.motor_torque * inv_max_motor_torque;
 
         xSemaphoreTake(mutex_inv_dyn, portMAX_DELAY);
-        float inv_dyn_error = inverse_dyn_nn->train_SGD(input_vector, &output);
+        inv_dyn_error = inverse_dyn_nn->train_SGD(input_vector, &output);
         xSemaphoreGive(mutex_inv_dyn);
 
 

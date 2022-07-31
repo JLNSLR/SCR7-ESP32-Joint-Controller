@@ -12,6 +12,8 @@
 
 
 #define BUFFERSIZE 10
+#define EMULATOR
+#define INVERSE_DYN
 
 
 //#define NN_CONTROL_DEBUG
@@ -85,22 +87,18 @@ public:
     void reset_controller_network();
 
 
-
     NeuralNetwork* emulator_nn;
     NeuralNetwork* controller_nn;
-
     NeuralNetwork* inverse_dyn_nn;
     float emulator_error = 0;
-    float average_emulator_error = 1e2;
-
-    float average_control_error = 1e2;
+    float average_emulator_error = 1e1;
+    float average_control_error = 1e1;
     float control_error = 0;
-
     bool control_net_pretrained = false;
+    float control_effort_penalty = 0.5;
 
 
-
-
+    float inv_dyn_error = 0;
 
 
 private:
@@ -124,6 +122,8 @@ private:
     char pid_tuner_name[7] = "pid_nn";
     char inv_name[7] = "inv_nn";
 
+
+
     static const int controller_depth = 4;
     int controller_width[controller_depth] = { 10,12,6,1 };
     nn_activation_f controller_act[controller_depth - 1] = { leakyReLu,leakyReLu,Linear };
@@ -133,7 +133,6 @@ private:
     nn_activation_f inv_act[inv_depth - 1] = { leakyReLu,leakyReLu,Linear };
 
     emulator_sample current_sample;
-
 
     const float max_angle = 180.0 * DEG2RAD;
     const float inv_max_angle = 1.0 / max_angle;

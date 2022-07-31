@@ -2,7 +2,7 @@
 #define DRIVE_SYS_TYPES_H
 
 /* Drive System State Flag */
-enum drvSys_StateFlag { error, not_ready, ready, foc_direct_torque, closed_loop_control_active, closed_loop_control_inactive };
+enum drvSys_StateFlag { error, not_ready, ready, closed_loop_control_active, closed_loop_control_inactive };
 /*Drive System Control Mode Variables */
 enum drvSys_controlMode { direct_torque, closed_loop_foc, admittance_control, stepper_mode };
 
@@ -82,12 +82,8 @@ struct drvSys_parameters {
 };
 
 struct drvSys_notch_filter_params {
-    bool notch_0_active;
-    bool notch_1_active;
-    float notch_frequ_0;
-    float notch_bw_0;
-    float notch_frequ_1;
-    float notch_bw_1;
+    bool notch_active;
+    float notch_frequ;
 };
 
 extern drvSys_parameters drvSys_parameter_config;

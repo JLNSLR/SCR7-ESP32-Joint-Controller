@@ -84,6 +84,11 @@ void drvSys_initialize();
  * @brief starts motor encoding processing. Reads position sensors, calculates velocity and acceleration and starts FOC controller.
  *
  */
+
+void drvSys_initialize_foc_based_control();
+
+void drvSys_initialize_stepper_based_control();
+
 int32_t drvSys_start_foc_processing();
 /**
  * @brief starts the motion controllers depending on the control mode
@@ -144,9 +149,7 @@ float _drvSys_check_joint_limit(float input);
 
 
 /* Adapt Filter Functions */
-void drvSys_set_notch_filters(int filter_id, float notch_frequ, float bandwidth_f = 10, bool activate = false);
-
-void drvSys_remove_notch_filter(int filter_id = 0);
+void drvSys_set_notch_filter(float notch_frequ, bool activate = false);
 
 void drvSys_set_kalman_filter_acc_noise(float acc_noise, bool joint);
 
@@ -233,8 +236,7 @@ drvSys_driveState drvSys_get_emulator_pred();
 
 float drvSys_get_pid_torque();
 
-
-
+float _drvSys_compute_notch_FIR_filter(float input, float* b_coef);
 
 
 /* Interrupt Handler */
