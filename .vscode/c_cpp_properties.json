@@ -12,6 +12,8 @@
                 "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/src",
                 "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/BLE/src",
+                "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/SparkFun Qwiic Scale NAU7802 Arduino Library/src",
+                "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
                 "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/DallasTemperature",
                 "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/OneWire",
                 "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/BasicLinearAlgebra",
@@ -108,7 +110,6 @@
                 "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src",
                 "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/WiFiClientSecure/src",
                 "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/WiFiProv/src",
-                "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
                 ""
             ],
             "browse": {
@@ -118,6 +119,8 @@
                     "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/src",
                     "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/BLE/src",
+                    "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/SparkFun Qwiic Scale NAU7802 Arduino Library/src",
+                    "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
                     "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/DallasTemperature",
                     "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/OneWire",
                     "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/BasicLinearAlgebra",
@@ -214,7 +217,6 @@
                     "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src",
                     "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/WiFiClientSecure/src",
                     "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/WiFiProv/src",
-                    "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
                     ""
                 ]
             },

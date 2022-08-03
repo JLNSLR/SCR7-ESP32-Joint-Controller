@@ -3,7 +3,14 @@
 		"*.tpp": "cpp",
 		"new": "cpp",
 		"cmath": "cpp",
-		"streambuf": "cpp"
+		"streambuf": "cpp",
+		"array": "cpp",
+		"deque": "cpp",
+		"string": "cpp",
+		"unordered_map": "cpp",
+		"unordered_set": "cpp",
+		"vector": "cpp",
+		"initializer_list": "cpp"
 	},
 	"C_Cpp.errorSquiggles": "Disabled"
 }
