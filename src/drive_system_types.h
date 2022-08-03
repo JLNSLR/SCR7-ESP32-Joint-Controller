@@ -6,13 +6,10 @@ enum drvSys_StateFlag { error, not_ready, ready, closed_loop_control_active, clo
 /*Drive System Control Mode Variables */
 enum drvSys_controlMode { direct_torque, closed_loop_foc, admittance_control, stepper_mode };
 
-extern drvSys_controlMode drvSys_mode;
-extern drvSys_StateFlag drvSys_state_flag;
-
 /* Drive System Priority constants */
 enum drvSys_priorities {
     foc_prio = 10, process_sensor_prio = 10, torque_control_prio = 9,
-    pid_dual_control_prio = 9, admittance_control_prio = 6, learn_dynamics_prio = 7
+    pid_dual_control_prio = 9, admittance_control_prio = 6, learn_dynamics_prio = 7, stepper_control_prio = 10
 };
 
 struct drvSys_PID_Gains {

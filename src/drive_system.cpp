@@ -19,7 +19,9 @@ SemaphoreHandle_t drvSys_mutex_joint_torque = xSemaphoreCreateBinary();
 
 SemaphoreHandle_t drvSys_mutex_torque_target = xSemaphoreCreateBinary();
 SemaphoreHandle_t drvSys_mutex_motor_commanded_torque = xSemaphoreCreateBinary();
-SemaphoreHandle_t drvSys_mutex_position_command = xSemaphoreCreateBinary();;
+SemaphoreHandle_t drvSys_mutex_position_command = xSemaphoreCreateBinary();
+SemaphoreHandle_t drvSys_mutex_accel_command = xSemaphoreCreateBinary();
+SemaphoreHandle_t drvSys_mutex_velocity_command = xSemaphoreCreateBinary();
 
 /*Hardware Timer Setup Variables*/
 const uint16_t drvSys_timer_prescaler_divider = DRVSYS_TIMER_PRESCALER_DIV; // with 80MHz Clock, makes the timer tick every 1us
@@ -30,6 +32,7 @@ volatile const  int32_t drvSys_timer_foc_ticks = DRVSYS_FOC_PERIOD_US / drvSys_t
 volatile const int32_t drvSys_timer_encoder_process_ticks = DRVSYS_PROCESS_ENCODERS_PERIOD_US / drvSys_timer_alarm_rate_us;
 volatile const int32_t drvSys_timer_torque_control_ticks = DRVSYS_CONTROL_TORQUE_PERIOD_US / drvSys_timer_alarm_rate_us;
 volatile const int32_t drvSys_timer_pos_control_ticks = DRVSYS_CONTROL_POS_PERIOD_US / drvSys_timer_alarm_rate_us;
+volatile const int32_t drvSys_timer_stepper_control_ticks = DRVSYS_CONTROL_STEPPER_PERIOD_US / drvSys_timer_alarm_rate_us;
 
 
 /*###########################################################################
@@ -48,13 +51,10 @@ const drvSys_Constants drvSys_constants = { .nominal_current_mA = DRVSYS_PHASE_C
 
 
 /*######## Changing Parameter Initial Parameters ####### */
-/* Drive System Control Mode */
-drvSys_controlMode drvSys_mode = closed_loop_foc;
-drvSys_StateFlag drvSys_state_flag = not_ready;
 
 /* Drive State Parameters */
-drvSys_controllerCondition drvSys_controller_state = { .control_mode = drvSys_mode,
-.state_flag = drvSys_state_flag,
+drvSys_controllerCondition drvSys_controller_state = { .control_mode = closed_loop_foc,
+.state_flag = not_ready,
 .calibrated = false,
 .hit_neg_limit = false,
 .hit_positive_limit = false,
@@ -84,6 +84,9 @@ KinematicKalmanFilter joint_kinematic_kalman_filter(float(DRVSYS_PROCESS_ENCODER
 /* FOC Controller */
 FOCController drvSys_foc_controller(&drvSys_magnetic_motor_encoder, &drvSys_driver, DRVSYS_PHASE_CURRENT_MAX_mA, DRVSYS_TORQUE_CONSTANT, glob_SPI_mutex);
 
+
+/* Closed Loop Stepper Controller */
+ClosedLoopStepperController drvSys_stepper_controller(&drvSys_driver);
 
 // Torque Sensor TODO
 
@@ -174,8 +177,9 @@ TaskHandle_t drvSys_PID_dual_controller_th;
 TaskHandle_t drvSys_process_joint_encoder_th;
 TaskHandle_t drvSys_process_torque_sensor_th;
 TaskHandle_t drvSys_admittance_controller_th;
-TaskHandle_t drvSys_learn_dynamics_th;
+TaskHandle_t drvSys_neural_controller_th;
 TaskHandle_t drvSys_handle_periphal_sensors_th;
+TaskHandle_t drvSys_stepper_controller_th;
 
 
 const float encoder2Rad = PI / 8192.0;
@@ -658,6 +662,8 @@ void drvSys_initialize() {
     xSemaphoreGive(drvSys_mutex_motor_vel);
     xSemaphoreGive(drvSys_mutex_joint_torque);
     xSemaphoreGive(drvSys_mutex_motor_commanded_torque);
+    xSemaphoreGive(drvSys_mutex_velocity_command);
+    xSemaphoreGive(drvSys_mutex_accel_command);
     xSemaphoreGive(drvSys_mutex_torque_target);
     xSemaphoreGive(glob_SPI_mutex);
 
@@ -730,9 +736,11 @@ void drvSys_initialize() {
 
 
     //if initialization was succesful:
-    drvSys_state_flag = ready;
+    drvSys_controller_state.state_flag = ready;
 
     drvSys_initialize_foc_based_control();
+
+    drvSys_initialize_stepper_based_control();
 
 
 };
@@ -815,7 +823,7 @@ void _drvSys_neural_controller_setup() {
         DRVSYS_STACKSIZE_LEARN_DYNAMICS_TASK,      // Stack size (bytes)
         NULL,      // task parameters
         learn_dynamics_prio,         // task priority
-        &drvSys_learn_dynamics_th,
+        &drvSys_neural_controller_th,
         DRVSYS_LEARNING_CORE // task handle
     );
 
@@ -825,9 +833,64 @@ void _drvSys_neural_controller_setup() {
 }
 
 void drvSys_initialize_stepper_based_control() {
+
+    Serial.println("DRVSYS_INFO: Initialize Closed Loop Stepper Controller");
+
+
+    xTaskCreatePinnedToCore(
+        _drvSys_closed_loop_stepper_task,   // function name
+        "Stepper_Controller_task", // task name
+        DRVSYS_STACKSIZE_PROCESS_ENCODER_TASK,      // Stack size (bytes)
+        NULL,      // task parameters
+        stepper_control_prio,         // task priority
+        &drvSys_stepper_controller_th,
+        1 // task handle
+    );
+
+    vTaskSuspend(drvSys_stepper_controller_th);
+
+
+
+
+}
+
+void _drvSys_start_stepper_controller() {
+    Serial.println("DRVSYS_INFO: Setup Closed Loop Stepper Controller");
+
+    drvSys_stepper_controller.setup(&drvSys_driver);
+
+    drvSys_stepper_controller.set_target_vel(0);
+
+
+
+    // Stop Torque Based Controllers
+
+    vTaskSuspend(drvSys_torque_controller_th);
+    vTaskSuspend(drvSys_admittance_controller_th);
+    vTaskSuspend(drvSys_foc_th);
+    vTaskSuspend(drvSys_PID_dual_controller_th);
+
+
+    Serial.println("DRVSYS_INFO: Start Stepper Controller");
+    drvSys_stepper_controller.start();
+    vTaskResume(drvSys_stepper_controller_th);
+
     drvSys_controller_state.control_mode = stepper_mode;
+}
 
 
+void _drvSys_stop_stepper_controller() {
+
+    Serial.println("DRVSYS_INFO: Stop Stepper Controller");
+
+    drvSys_stepper_controller.stop();
+    vTaskSuspend(drvSys_stepper_controller_th);
+
+
+    vTaskResume(drvSys_torque_controller_th);
+    vTaskResume(drvSys_admittance_controller_th);
+    vTaskResume(drvSys_foc_th);
+    vTaskResume(drvSys_PID_dual_controller_th);
 
 
 }
@@ -1016,7 +1079,7 @@ void drvSys_neural_control_save_nets(bool reset) {
 
 int32_t  drvSys_start_foc_processing() {
 
-    if (drvSys_state_flag == not_ready) {
+    if (drvSys_controller_state.state_flag == not_ready) {
         Serial.println("DRVSYS_INFO: Can not start FOC Processing, Drive system is not ready.");
         return -1;
 
@@ -1078,8 +1141,7 @@ int32_t  drvSys_start_foc_processing() {
 
 int32_t drvSys_start_motion_control(drvSys_controlMode control_mode) {
 
-    if (drvSys_controller_state.state_flag == ready
-        || drvSys_controller_state.state_flag == not_ready || drvSys_controller_state.state_flag == error) {
+    if (drvSys_controller_state.state_flag == not_ready || drvSys_controller_state.state_flag == error) {
 
         Serial.println("DRVSYS_ERROR: Drive not ready to start Closed Loop Motion Control.");
 
@@ -1090,8 +1152,8 @@ int32_t drvSys_start_motion_control(drvSys_controlMode control_mode) {
     if (drvSys_controller_state.state_flag == closed_loop_control_inactive) {
 
         Serial.println("DRVSYS_INFO: Start Closed Loop Motion Control.");
-        drvSys_mode = control_mode;
-        drvSys_controller_state.control_mode = drvSys_mode;
+        drvSys_controlMode drvSys_mode = control_mode;
+
 
         switch (drvSys_mode) {
         case closed_loop_foc:
@@ -1107,12 +1169,13 @@ int32_t drvSys_start_motion_control(drvSys_controlMode control_mode) {
             _drvSys_setup_admittance_controller();
             break;
         case stepper_mode:
-            //
+            _drvSys_start_stepper_controller();
             break;
         default:
             _drvSys_setup_dual_controller();
             break;
         }
+        drvSys_controller_state.control_mode = drvSys_mode;
 
 
         drvSys_controller_state.state_flag = closed_loop_control_active;
@@ -1135,6 +1198,7 @@ void _drvSys_setup_dual_controller() {
     float torque_limit = drvSys_parameter_config.max_torque_Nm;
     drvSys_position_controller.setOutputLimits(torque_limit * (-1.0), torque_limit);
     drvSys_position_controller.setpoint = 0.0;
+
 
     drvSys_position_controller.Initialize();
     drvSys_position_controller.setMode(PID_MODE_INACTIVE);
@@ -1301,7 +1365,9 @@ void _drvSys_set_target_velocity(float vel) {
     else if (vel < (-1.0) * drvSys_parameter_config.max_vel) {
         vel = (-1.0) * drvSys_parameter_config.max_vel;
     }
+    xSemaphoreTake(drvSys_mutex_velocity_command, portMAX_DELAY);
     drvSys_vel_target = vel;
+    xSemaphoreGive(drvSys_mutex_velocity_command);
 
 };
 
@@ -1314,7 +1380,9 @@ void _drvSys_set_target_pos(float pos) {
     else if (pos < drvSys_parameter_config.limit_low_deg) {
         pos = drvSys_parameter_config.limit_low_deg;
     }
+    xSemaphoreTake(drvSys_mutex_position_command, portMAX_DELAY);
     drvSys_pos_target = pos;
+    xSemaphoreGive(drvSys_mutex_position_command);
 
 };
 
@@ -1351,11 +1419,12 @@ void IRAM_ATTR _drvSys_on_foc_timer() {
     tickCount++;
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-
+    // Process Encoders & Filter Data
     if (tickCount % drvSys_timer_encoder_process_ticks == 0) { //react every 250us
         vTaskNotifyGiveFromISR(drvSys_process_encoders_th, &xHigherPriorityTaskWoken);
     }
 
+    // Torque Based Control Active
     if (drvSys_controller_state.control_mode != stepper_mode) {
         if (tickCount % drvSys_timer_foc_ticks == 0) { // react every 200us ->5kHz
             vTaskNotifyGiveFromISR(drvSys_foc_th, &xHigherPriorityTaskWoken);
@@ -1363,17 +1432,24 @@ void IRAM_ATTR _drvSys_on_foc_timer() {
         if (tickCount % drvSys_timer_torque_control_ticks == 0) {
             vTaskNotifyGiveFromISR(drvSys_torque_controller_th, &xHigherPriorityTaskWoken);
         }
+
+        if (drvSys_controller_state.state_flag == closed_loop_control_active) {
+
+            /*
+            if (tickCount % drvSys_timer_vel_control_ticks == 0) {
+                vTaskNotifyGiveFromISR(drvSys_vel_controller_th, &xHigherPriorityTaskWoken);
+            }
+            */
+            if (tickCount % drvSys_timer_pos_control_ticks == 0) {
+                vTaskNotifyGiveFromISR(drvSys_PID_dual_controller_th, &xHigherPriorityTaskWoken);
+            }
+        }
     }
 
-    if (drvSys_controller_state.state_flag == closed_loop_control_active) {
+    if (drvSys_controller_state.control_mode == stepper_mode) {
 
-        /*
-        if (tickCount % drvSys_timer_vel_control_ticks == 0) {
-            vTaskNotifyGiveFromISR(drvSys_vel_controller_th, &xHigherPriorityTaskWoken);
-        }
-        */
-        if (tickCount % drvSys_timer_pos_control_ticks == 0) {
-            vTaskNotifyGiveFromISR(drvSys_PID_dual_controller_th, &xHigherPriorityTaskWoken);
+        if (tickCount % drvSys_timer_stepper_control_ticks == 0) {
+            vTaskNotifyGiveFromISR(drvSys_stepper_controller_th, &xHigherPriorityTaskWoken);
         }
     }
 
@@ -1510,7 +1586,8 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
 
         if (position_controller_processing_thread_notification) {
 
-            if (drvSys_mode == closed_loop_foc || drvSys_mode == admittance_control) {
+
+            if (drvSys_controller_state.control_mode == closed_loop_foc || drvSys_controller_state.control_mode == admittance_control) {
 
 
                 xSemaphoreTake(drvSys_mutex_joint_position, portMAX_DELAY);
@@ -1587,6 +1664,62 @@ void _drvSys_torque_controller_task(void* parameters) {
         }
     };
 };
+
+void _drvSys_closed_loop_stepper_task(void* parameters) {
+
+    TIMERG0.wdt_wprotect = TIMG_WDT_WKEY_VALUE;
+    TIMERG0.wdt_feed = 1;
+    TIMERG0.wdt_wprotect = 0;
+    uint32_t stepper_controller_thread_notification;
+
+    static float dir_vel = 1.0;
+    static float dir_pos = 1.0;
+
+    if (FLIP_DIR_VEL) {
+        dir_vel = -1.0;
+    }
+
+    if (FLIP_DIR_POS) {
+        dir_pos = -1.0;
+    }
+
+    const TickType_t stepper_delay = DRVSYS_CONTROL_ADMITTANCE_PERIOD_MS / portTICK_PERIOD_MS;
+
+    while (true) {
+        stepper_controller_thread_notification = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        if (stepper_controller_thread_notification) {
+
+            xSemaphoreTake(drvSys_mutex_position_command, portMAX_DELAY);
+            float target_pos = drvSys_pos_target;
+            xSemaphoreGive(drvSys_mutex_position_command);
+
+            xSemaphoreTake(drvSys_mutex_velocity_command, portMAX_DELAY);
+            float target_vel = drvSys_vel_target;
+            xSemaphoreGive(drvSys_mutex_velocity_command);
+
+
+            xSemaphoreTake(drvSys_mutex_joint_position, portMAX_DELAY);
+            float actual_pos = drvSys_joint_position;
+            xSemaphoreGive(drvSys_mutex_joint_position);
+
+            xSemaphoreTake(drvSys_mutex_joint_vel, portMAX_DELAY);
+            float actual_vel = drvSys_joint_velocity;
+            xSemaphoreGive(drvSys_mutex_joint_vel);
+
+            float pos_error = actual_pos - target_pos;
+
+            float pos_error_gain = 0.5;
+
+
+            float vel_target = dir_vel * target_vel + dir_pos * pos_error * pos_error_gain;
+
+            drvSys_stepper_controller.set_target_vel(vel_target);
+
+        }
+
+    }
+}
 
 
 void _drvSys_setup_direct_controller() {

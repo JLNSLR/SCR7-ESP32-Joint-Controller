@@ -15,6 +15,7 @@
 #include <kinematic_kalman_filter.h>
 #include <drive_system_types.h>
 #include <neural_controller.h>
+#include <closed_loop_stepper_control.h>
 
 #include <Preferences.h>
 
@@ -37,6 +38,10 @@
 #define DRVSYS_CONTROL_POS_FREQ 1000 //Hz
 // Torque Sensor Processing
 #define DRVSYS_PROCESS_TORQUE_SENSOR_PERIOD_MS 333
+
+// Closed Loop Stepper Controller
+#define DRVSYS_CONTROL_STEPPER_PERIOD_US 500
+#define DRVSYS_CONTROL_STEPPER_FREQU 2000 //Hz
 
 //Admittance Controller
 #define DRVSYS_CONTROL_ADMITTANCE_PERIOD_MS 5
@@ -94,7 +99,11 @@ int32_t drvSys_start_foc_processing();
  * @brief starts the motion controllers depending on the control mode
  *
  */
-int32_t drvSys_start_motion_control(drvSys_controlMode = closed_loop_foc);
+int32_t drvSys_start_motion_control(drvSys_controlMode mode = closed_loop_foc);
+
+
+void _drvSys_start_stepper_controller();
+void _drvSys_stop_stepper_controller();
 
 void drvSys_stop_controllers();
 
@@ -269,8 +278,10 @@ void _drvSys_admittance_controller_task(void* parameters);
 
 void _drvSys_monitor_system_task(void* parameters);
 
+void _drvSys_closed_loop_stepper_task(void* parameters);
 
-/* internal Funvtions */
+
+/* internal Functions */
 
 void _drvSys_setup_dual_controller();
 

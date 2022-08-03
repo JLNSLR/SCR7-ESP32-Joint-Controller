@@ -19,14 +19,13 @@ void cli_init() {
 
     // Start Task
 
-    xTaskCreatePinnedToCore(
+    xTaskCreate(
         _cli_task,   // function name
         "cli_task", // task name
         5000,      // Stack size (bytes)
         NULL,      // task parameters
         2,         // task priority
-        &cli_task, // task handle
-        1 // Core
+        &cli_task // task handle
     );
 
     cli_active = true;

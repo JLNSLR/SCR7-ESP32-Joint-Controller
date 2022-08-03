@@ -51,18 +51,15 @@ void setup()
   FastLED.setBrightness(255);
   FastLED.show();
 
-  // Initialize Command-Line-Interface (CLI)
-  cli_init();
-
   // Initialize Drive System 
   drvSys_initialize();
   Serial.println("JCTRL_INFO: Setting up Drive System succesful. Starting FOC-Controller.");
-  //drvSys_start_foc_processing();
+  drvSys_start_foc_processing();
 
   // Calibration of FOC
   //drvSys_calibrate_FOC();
 
-  //drvSys_start_motion_control(closed_loop_foc);
+  drvSys_start_motion_control(direct_torque);
 
   /** Setup ASCI Interface */
 
@@ -89,12 +86,10 @@ void setup()
   // Start Motion Control Interface
   Serial.println("JCTRL_INFO: Starting Motion Control Interface.");
 
-  //start_motion_interface();
+  // Initialize Command-Line-Interface (CLI)
+  cli_init();
 
-  Wire.begin(SDA, SCL);
-
-  torque.init(dms);
-
+  start_motion_interface();
 
 
 }
@@ -125,8 +120,6 @@ void loop()
   TIMERG0.wdt_feed = 1;
   TIMERG0.wdt_wprotect = 0;
 
-  float value = torque.get_torque_measurement();
-
 
 
   counter++;
@@ -140,7 +133,7 @@ void loop()
         dir = -dir;
       }
       vel = (float(rand()) / float(RAND_MAX)) * 60.0;
-      acc = (float(rand()) / float(RAND_MAX)) * 1000.0;
+      acc = (float(rand()) / float(RAND_MAX)) * 100.0;
 
       handle_motion_command(target * DEG2RAD * dir, vel * DEG2RAD, acc * DEG2RAD);
     }
@@ -148,6 +141,7 @@ void loop()
 
   }
   */
+
 
 
 
