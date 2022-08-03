@@ -12,7 +12,8 @@
 #include <CAN.h>
 #include <cli_core.h>
 #include <motion_interface.h>
-
+#include <Wire.h>
+#include <torqueSensor.h>
 
 
 // --- Global Variables --- //
@@ -26,6 +27,11 @@ float acc = 1.0;
 float vel = 1.0;
 
 int counter = 0;
+
+TorqueSensor torque;
+
+
+
 
 void setup()
 {
@@ -51,12 +57,12 @@ void setup()
   // Initialize Drive System 
   drvSys_initialize();
   Serial.println("JCTRL_INFO: Setting up Drive System succesful. Starting FOC-Controller.");
-  drvSys_start_foc_processing();
+  //drvSys_start_foc_processing();
 
   // Calibration of FOC
   //drvSys_calibrate_FOC();
 
-  drvSys_start_motion_control(closed_loop_foc);
+  //drvSys_start_motion_control(closed_loop_foc);
 
   /** Setup ASCI Interface */
 
@@ -83,13 +89,12 @@ void setup()
   // Start Motion Control Interface
   Serial.println("JCTRL_INFO: Starting Motion Control Interface.");
 
-  start_motion_interface();
+  //start_motion_interface();
 
+  Wire.begin(SDA, SCL);
 
-  delay(1000);
+  torque.init(dms);
 
-
-  drvSys_start_motion_control(closed_loop_foc);
 
 
 }
@@ -109,6 +114,7 @@ void loop()
 */
 
 
+
   cli_read_line_cmd();
   cli_parse_line_cmd();
   cli_execute_line_cmd();
@@ -119,13 +125,13 @@ void loop()
   TIMERG0.wdt_feed = 1;
   TIMERG0.wdt_wprotect = 0;
 
-
+  float value = torque.get_torque_measurement();
 
 
 
   counter++;
 
-
+  /*
   if (counter % 500 == 0) {
 
     if (!motion_planner.executing_traj_flag) {
@@ -141,6 +147,7 @@ void loop()
 
 
   }
+  */
 
 
 
