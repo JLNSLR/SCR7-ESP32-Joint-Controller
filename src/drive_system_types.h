@@ -9,14 +9,13 @@ enum drvSys_controlMode { direct_torque, closed_loop_foc, admittance_control, st
 /* Drive System Priority constants */
 enum drvSys_priorities {
     foc_prio = 10, process_sensor_prio = 10, torque_control_prio = 9,
-    pid_dual_control_prio = 9, admittance_control_prio = 6, learn_dynamics_prio = 7, stepper_control_prio = 10
+    pid_dual_control_prio = 9, admittance_control_prio = 6, learn_dynamics_prio = 7, stepper_control_prio = 10, torque_sense_prio = 8, monitor_prio = 5
 };
 
 struct drvSys_PID_Gains {
     float K_p;
     float K_i;
     float K_d;
-    float K_vel_ff;
 
 };
 
@@ -71,7 +70,8 @@ struct drvSys_parameters {
     int max_current_mA;
     float max_torque_Nm;
     float max_vel;
-    drvSys_PID_Gains pid_gains;
+    drvSys_PID_Gains pos_pid_gains;
+    drvSys_PID_Gains vel_pid_gains;
     drvSys_admittance_parameters admittance_gains;
     float limit_high_deg;
     float limit_low_deg;
@@ -103,6 +103,8 @@ struct drvSys_controllerCondition {
     bool overtemperature;
     bool temperature_warning;
     float temperature;
+    int fan_level;
+    bool neural_control_active;
 };
 
 

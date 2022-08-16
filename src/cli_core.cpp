@@ -24,7 +24,7 @@ void cli_init() {
         "cli_task", // task name
         5000,      // Stack size (bytes)
         NULL,      // task parameters
-        2,         // task priority
+        5,         // task priority
         &cli_task // task handle
     );
 
@@ -112,6 +112,9 @@ void cli_execute_line_cmd() {
     }
     if (!processed_cmd) {
         processed_cmd = jctrl_cli_manage_calibration_command(cli_args);
+    }
+    if (!processed_cmd) {
+        processed_cmd = jctrl_cli_process_trajectory_command(cli_args);
     }
 
 

@@ -45,6 +45,14 @@ void FOCController::setup_driver() {
 
 }
 
+void FOCController::set_max_current(int16_t max_current_mA, float max_torque) {
+    xSemaphoreTake(foc_spi_mutex, portMAX_DELAY);
+    driver->rms_current(max_current_mA); // Set motor RMS current
+    xSemaphoreGive(foc_spi_mutex);
+    this->foc_output_const = (255.0 / 8191.0) * 1.0 / max_torque;
+}
+
+
 void FOCController::calibrate_phase_angle(uint32_t phase_angle_null) {
 
     if (phase_angle_null != 0) {

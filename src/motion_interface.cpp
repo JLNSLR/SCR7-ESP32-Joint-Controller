@@ -6,18 +6,28 @@ extern MotionPlanner motion_planner(MOTION_MAX_VEL, MOTION_MAX_ACC, MOTION_MAX_A
 
 motion_control_mode motion_mode = position;
 
+bool reset_test_sig = true;
+
 struct extendedPositionCommand {
     float target_pos;
     float travel_vel = 0;
     float travel_acc = 0;
 };
 
+struct test_sinusoid {
+    float max_acc;
+    float max_frequ;
+};
+
+test_sinusoid test_sine_data;
+
 CircularBuffer<extendedPositionCommand, 4> position_command_buffer;
 CircularBuffer<drvSys_driveTargets, 10> trajectory_command_buffer;
 
-bool no_commands_given = true;
+bool command_given = false;
 
-bool test_signal_active = false;
+bool test_sinusoid_active = false;
+bool test_goto_active = false;
 
 void start_motion_interface() {
 
@@ -50,7 +60,7 @@ void handle_motion_command(float target_pos) {
 
         position_command_buffer.push(command);
     }
-    no_commands_given = false;
+    command_given = true;
 }
 
 void handle_motion_command(float target_pos, float travel_vel, float travel_acc) {
@@ -68,14 +78,14 @@ void handle_motion_command(float target_pos, float travel_vel, float travel_acc)
 
         position_command_buffer.push(command);
     }
-    no_commands_given = false;
+    command_given = true;
 }
 
 void handle_motion_command(drvSys_driveTargets target_traj_point) {
 
     motion_mode = trajectory;
     drvSys_set_target(target_traj_point);
-    no_commands_given = false;
+    command_given = true;
 }
 
 
@@ -90,7 +100,7 @@ void _motion_sequencer_task(void* parameters) {
 
     while (true) {
 
-        if (motion_mode == position && no_commands_given == false) {
+        if (motion_mode == position && command_given) {
 
             if (!position_command_buffer.isEmpty() && !motion_planner.executing_traj_flag) {
                 extendedPositionCommand command = position_command_buffer.pop();
@@ -116,9 +126,9 @@ void _motion_sequencer_task(void* parameters) {
         }
 
         counter++;
-        /*
-        if (test_signal_active) {
-            if (counter % 600 == 0) {
+
+        if (test_goto_active) {
+            if (counter % 100 == 0) {
 
                 float dir = 1.0;
                 float target = 0;
@@ -136,7 +146,10 @@ void _motion_sequencer_task(void* parameters) {
 
 
             }
-    }*/
+        }
+        else if (test_sinusoid_active) {
+            _output_test_sinusoid_signal();
+        }
 
 
 
@@ -157,5 +170,93 @@ void set_motion_planner_constraints(float max_vel, float max_acc, float max_jerk
     motion_planner.constraints.max_vel = max_vel;
     motion_planner.constraints.max_jerk = max_jerk;
     motion_planner.constraints.max_jerk_deccel = max_jerk;
+
+}
+
+void start_sinusoidal_test_signal(float max_acc, float max_frequ) {
+
+    test_sine_data.max_acc = max_acc;
+    test_sine_data.max_frequ = max_frequ;
+
+    test_sinusoid_active = true;
+}
+
+void stop_test_signal() {
+
+    test_goto_active = false;
+    test_sinusoid_active = false;
+
+    reset_test_sig = true;
+}
+
+
+void start_goto_test_signal() {
+
+    test_goto_active = true;
+}
+
+
+
+void _output_test_sinusoid_signal() {
+
+    static int n_counter = 0;
+
+    static float delta_frequ = 0.01;
+    static int f_counter = 0;
+    static float frequ = 0.0001;
+
+    if (reset_test_sig) {
+        frequ = 0.0001;
+        n_counter = 0;
+        reset_test_sig = false;
+    }
+
+    float delta_t = 1e-3;
+
+    float t = n_counter * delta_t;
+
+    test_sine_data.max_acc = 100;
+
+    float pos_amplitude = 90.0 * DEG2RAD;
+    float acc_amplitude = pos_amplitude * (2.0 * PI * frequ) * (2.0 * PI * frequ);
+    float vel_amplitude = pos_amplitude * (2.0 * PI * frequ);
+
+    if (acc_amplitude > test_sine_data.max_acc) {
+        pos_amplitude = test_sine_data.max_acc * (1.0 / (2.0 * PI * frequ));
+        vel_amplitude = test_sine_data.max_acc * (1.0 / (2.0 * PI * frequ));
+        acc_amplitude = test_sine_data.max_acc;
+    }
+
+    float acc = -acc_amplitude * sin(2.0 * PI * frequ * t);
+    float vel = vel_amplitude * cos(2.0 * PI * frequ * t);
+    float pos = pos_amplitude * sin(2.0 * PI * frequ * t);
+    /*
+    Serial.println("---");
+    Serial.println(acc * RAD2DEG);
+    Serial.println(vel * RAD2DEG);
+    Serial.println(pos * RAD2DEG);
+    Serial.println("--");
+    */
+
+    n_counter++;
+
+
+    if (n_counter % 10000 == 0) {
+        frequ = frequ + delta_frequ;
+
+        if (frequ > test_sine_data.max_frequ) {
+            frequ = 0.001;
+        }
+    }
+
+    drvSys_driveTargets target;
+    target.acc_target = acc;
+    target.vel_target = vel;
+    target.pos_target = pos;
+    target.motor_torque_ff = 0;
+    target.ref_torque = 0;
+
+    drvSys_set_target(target);
+
 
 }

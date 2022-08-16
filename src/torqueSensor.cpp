@@ -1,4 +1,5 @@
 #include <torqueSensor.h>
+#include <drive_system_settings.h>
 
 
 TorqueSensor::TorqueSensor() {
@@ -14,7 +15,7 @@ TorqueSensor::TorqueSensor(torque_sensor_type type) {
 
 bool TorqueSensor::init(torque_sensor_type type, float sample_time_s) {
 
-
+    xSemaphoreTake(glob_I2C_mutex, portMAX_DELAY);
     Wire.begin(SDA, SCL);
     bool init_success = false;
 
@@ -31,7 +32,7 @@ bool TorqueSensor::init(torque_sensor_type type, float sample_time_s) {
         }
     }
 
-    if (type == dms) {
+    if (type == cap) {
         if (init_capacitive_sensors()) {
             Serial.println("DRVSYS: Capacitive torque sensor initialized.");
             init_success = true;
@@ -41,6 +42,7 @@ bool TorqueSensor::init(torque_sensor_type type, float sample_time_s) {
             init_success = false;
         }
     }
+    xSemaphoreGive(glob_I2C_mutex);
 
 
     // Drift Compensator init
@@ -79,11 +81,17 @@ bool TorqueSensor::init_dms() {
 
     if (dms_sensor.begin()) {
         sensor_ok = true;
+        dms_sensor.setLDO(NAU7802_LDO_3V0);
         dms_sensor.setSampleRate(NAU7802_SPS_320);
         dms_sensor.setGain(NAU7802_GAIN_32);
         dms_sensor.beginCalibrateAFE();
         dms_sensor.waitForCalibrateAFE();
     }
+
+    conversion_factor = TORQUE_SENSE_SLOPE;
+    internal_offset = TORQUE_SENSE_INT_OFFSET;
+
+    calibrated = true;
 
     return sensor_ok;
 
@@ -100,12 +108,13 @@ bool TorqueSensor::init_capacitive_sensors() {
 }
 
 float TorqueSensor::read_raw_capacitive_sensors() {
-
+    xSemaphoreTake(glob_I2C_mutex, portMAX_DELAY);
     for (int i = 0; i < CAPACITIVE_CHANNELS; i++) { // for each channel
         // ### read 28bit data
         capacitor_values[i] = cap_sensor->getReading28(i) - capacitor_baselines[i];
         // ### Transmit data to serial in simple format readable by SerialPlot application.
     }
+    xSemaphoreGive(glob_I2C_mutex);
 
 
     float prop_torque = (capacitor_values[0] - capacitor_values[1]) + (capacitor_values[2] - capacitor_values[3]);
@@ -120,22 +129,28 @@ float TorqueSensor::read_raw_capacitive_sensors() {
 float TorqueSensor::read_raw_dms() {
 
     float data = 0;
+
+    xSemaphoreTake(glob_I2C_mutex, portMAX_DELAY);
     if (dms_sensor.available()) {
-        data = dms_sensor.getReading() - internal_offset;
+        raw_sensor_val = dms_sensor.getReading();
+        data = raw_sensor_val - internal_offset;
+        xSemaphoreGive(glob_I2C_mutex);
 
-        Serial.print(data);
-
+        //Serial.print(data);
+        /*
         float delta_data = (data - prev_val) * 0.01 + 0.99 * delta_data_prev;
         prev_val = data;
         delta_data_prev = delta_data;
 
 
         data = data + damping * delta_data;
-        Serial.print("\t");
-        Serial.println(data);
+        */
+        //Serial.print("\t");
+        //Serial.println(data);
 
 
     }
+    xSemaphoreGive(glob_I2C_mutex);
 
     return data;
 }
@@ -149,7 +164,7 @@ float TorqueSensor::get_torque_measurement() {
         sensor_val = read_raw_dms();
 
         //Serial.print(sensor_val);
-        sensor_val = compensate_drift(sensor_val);
+        //sensor_val = compensate_drift(sensor_val);
         //Serial.print("\t");
         //Serial.println(sensor_val);
 

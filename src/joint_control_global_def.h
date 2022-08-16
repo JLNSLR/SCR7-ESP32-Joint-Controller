@@ -13,6 +13,7 @@
 #define HALL_SENSOR_PIN 36
 #define RGB_LED_PIN 33
 #define FAN_PWM_PIN 15
+#define TEMP_SENSE_PIN 13
 
 //I2C
 #define SDA 21

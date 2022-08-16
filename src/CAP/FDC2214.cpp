@@ -37,6 +37,9 @@
 #include <Wire.h>
 #include "FDC2214.h"
 
+#define SETTLE_COUNT_REG_VAL 0x0100
+#define COUNT_REG_VAL 0x4000
+
 FDC2214::FDC2214(uint8_t i2caddr) {
 	_i2caddr = i2caddr;
     //_i2caddr = FDC2214_I2C_ADDRESS;
@@ -87,10 +90,10 @@ void FDC2214::loadSettings(uint8_t chanMask, uint8_t autoscanSeq, uint8_t deglit
 	if (chanMask & 0x01) {
 
 		//settle count maximized, slow application
-		write16FDC(FDC2214_SETTLECOUNT_CH0, 0x64);
+		write16FDC(FDC2214_SETTLECOUNT_CH0, SETTLE_COUNT_REG_VAL);
 
 		//rcount maximized for highest accuracy
-		write16FDC(FDC2214_RCOUNT_CH0, 0xFFFF);
+		write16FDC(FDC2214_RCOUNT_CH0, COUNT_REG_VAL);
 
 		//no offset
 		write16FDC(FDC2214_OFFSET_CH0, 0x0000);
@@ -108,22 +111,22 @@ void FDC2214::loadSettings(uint8_t chanMask, uint8_t autoscanSeq, uint8_t deglit
 	}
 	// Init chan2, if selected by channel init mask
 	if (chanMask & 0x02) {
-		write16FDC(FDC2214_SETTLECOUNT_CH1, 0x64);
-		write16FDC(FDC2214_RCOUNT_CH1, 0xFFFF);
+		write16FDC(FDC2214_SETTLECOUNT_CH1, SETTLE_COUNT_REG_VAL);
+		write16FDC(FDC2214_RCOUNT_CH1, COUNT_REG_VAL);
 		write16FDC(FDC2214_OFFSET_CH1, 0x0000);
 		write16FDC(FDC2214_CLOCK_DIVIDERS_CH1, 0x2001);
 		write16FDC(FDC2214_DRIVE_CH1, 0xF800);	
 	}	
 	if (chanMask & 0x04) {
-		write16FDC(FDC2214_SETTLECOUNT_CH2, 0x64);
-		write16FDC(FDC2214_RCOUNT_CH2, 0xFFFF);
+		write16FDC(FDC2214_SETTLECOUNT_CH2, SETTLE_COUNT_REG_VAL);
+		write16FDC(FDC2214_RCOUNT_CH2, COUNT_REG_VAL);
 		write16FDC(FDC2214_OFFSET_CH2, 0x0000);
 		write16FDC(FDC2214_CLOCK_DIVIDERS_CH2, 0x2001);
 		write16FDC(FDC2214_DRIVE_CH2, 0xF800);	
 	}	
 	if (chanMask & 0x08) {
-		write16FDC(FDC2214_SETTLECOUNT_CH3, 0x64);
-		write16FDC(FDC2214_RCOUNT_CH3, 0xFFFF);
+		write16FDC(FDC2214_SETTLECOUNT_CH3, SETTLE_COUNT_REG_VAL);
+		write16FDC(FDC2214_RCOUNT_CH3, COUNT_REG_VAL);
 		write16FDC(FDC2214_OFFSET_CH3, 0x0000);
 		write16FDC(FDC2214_CLOCK_DIVIDERS_CH3, 0x2001);
 		write16FDC(FDC2214_DRIVE_CH3, 0xF800);	

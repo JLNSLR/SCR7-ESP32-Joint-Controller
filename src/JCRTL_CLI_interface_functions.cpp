@@ -30,15 +30,15 @@ bool jctrl_cli_process_torque_command(char(*cli_arg)[N_MAX_ARGS]) {
     if (strcmp(keyword, "torque") == 0 || strcmp(keyword, "t") == 0) {
         processed = true;
 
-            float target_torque;
-            if (strcmp(cli_arg[1], "ff") == 0) {
-                target_torque = atof(cli_arg[2]);
-            }
-            target_torque = atof(cli_arg[1]);
+        float target_torque;
+        if (strcmp(cli_arg[1], "ff") == 0) {
+            target_torque = atof(cli_arg[2]);
+        }
+        target_torque = atof(cli_arg[1]);
 
-            _jctrl_cli_feedback_output("Torque command: " + String(target_torque) + " Nm.");
-            _drvSys_set_target_torque(target_torque);
-            return processed;
+        _jctrl_cli_feedback_output("Torque command: " + String(target_torque) + " Nm.");
+        _drvSys_set_target_torque(target_torque);
+        return processed;
     }
 
     return processed;
@@ -80,6 +80,28 @@ bool jctrl_cli_process_motion_planner_commands(char(*cli_arg)[N_MAX_ARGS]) {
 
 
     }
+
+    if (strcmp(keyword, "mov_test") == 0) {
+        processed = true;
+        bool test_sig_goto = atoi(value_0);
+
+        if (test_sig_goto == true) {
+            start_goto_test_signal();
+            return processed;
+        }
+
+        if (test_sig_goto == false) {
+
+            start_sinusoidal_test_signal(DRVSYS_ACC_MAX, 1);
+        }
+
+    }
+    if (strcmp(keyword, "mov_stop") == 0) {
+        processed = true;
+        stop_test_signal();
+    }
+
+
     return processed;
 
 }
@@ -88,15 +110,28 @@ bool jctrl_cli_process_pid_command(char(*cli_arg)[N_MAX_ARGS]) {
 
     char* keyword = cli_arg[0];
     char* keyword_2 = cli_arg[1];
+    char* keyword_3 = cli_arg[2];
     bool processed = false;
 
     if (strcmp(keyword, "pid") == 0 || strcmp(keyword, "PID") == 0) {
         processed = true;
-        if (strcmp(keyword_2, "gains") == 0 || strcmp(keyword_2, "g") == 0) {
 
-            float p_val = atof(cli_arg[2]);
-            float i_val = atof(cli_arg[3]);
-            float d_val = atof(cli_arg[4]);
+        bool pos = true;
+
+        if (strcmp(keyword_2, "p") == 0 || strcmp(keyword_2, "pos") == 0) {
+            pos = true;
+        }
+
+        if (strcmp(keyword_2, "v") == 0 || strcmp(keyword_2, "vel") == 0) {
+            pos = false;
+        }
+
+
+        if (strcmp(keyword_3, "gains") == 0 || strcmp(keyword_3, "g") == 0) {
+
+            float p_val = atof(cli_arg[3]);
+            float i_val = atof(cli_arg[4]);
+            float d_val = atof(cli_arg[5]);
 
             bool save = false;
 
@@ -105,16 +140,28 @@ bool jctrl_cli_process_pid_command(char(*cli_arg)[N_MAX_ARGS]) {
                 _jctrl_cli_feedback_output("Saved position PID gains to: " + String(p_val) + ", " + String(i_val) + ", " + String(d_val) + ".");
             }
             else {
-                _jctrl_cli_feedback_output("Set position PID gains to: " + String(p_val) + ", " + String(i_val) + ", " + String(d_val) + ".");
+                if (pos) {
+                    _jctrl_cli_feedback_output("Position Controller: ");
+                }
+                else {
+                    _jctrl_cli_feedback_output("Velocity Controller: ");
+                }
+                _jctrl_cli_feedback_output("Set PID gains to: " + String(p_val) + ", " + String(i_val) + ", " + String(d_val) + ".");
             }
 
-            drvSys_set_pos_PID_gains(p_val, i_val, d_val, save);
+            drvSys_set_PID_gains(pos, p_val, i_val, d_val, save);
         }
 
-        if (strcmp(keyword_2, "vel_ff") == 0) {
-            float k_vel = atof(cli_arg[2]);
-            drvSys_set_ff_gains(k_vel);
+        if (strcmp(keyword_3, "adv") == 0) {
+
+            int type = atoi(cli_arg[3]);
+            float val = atof(cli_arg[4]);
+
+            drvSys_adv_PID_settings(pos, type, val);
+
+            _jctrl_cli_feedback_output("Changed PID settings.");
         }
+
 
     }
 
@@ -152,6 +199,11 @@ bool jctrl_cli_process_drive_sys_command(char(*cli_arg)[N_MAX_ARGS]) {
             if (mode == 2) {
                 drvSys_start_motion_control(admittance_control);
                 _jctrl_cli_feedback_output("Started motion control in admittance control mode.");
+                return processed;
+            }
+            if (mode == 3) {
+                drvSys_start_motion_control(stepper_mode);
+                _jctrl_cli_feedback_output("Started motion control in stepper mode.");
                 return processed;
             }
 
@@ -211,6 +263,16 @@ bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]) {
         if (strcmp(mode, "tune_pos") == 0) {
             cli_output_active = true;
             cli_out_mode = tune_pos;
+            return processed;
+        }
+        if (strcmp(mode, "tune_vel") == 0) {
+            cli_output_active = true;
+            cli_out_mode = tune_vel;
+            return processed;
+        }
+        if (strcmp(mode, "torque") == 0) {
+            cli_output_active = true;
+            cli_out_mode = torque;
             return processed;
         }
         if (strcmp(mode, "nn_inv") == 0) {
@@ -525,6 +587,8 @@ void _jctrl_cli_output_periodic() {
             drvSys_driveTargets targets = drvSys_get_targets();
             drvSys_FullDriveState state = drvSys_get_full_drive_state();
 
+            drvSys_controllerCondition cond = drvSys_get_controllerState();
+
 
             Serial.print(state.joint_pos * RAD2DEG);
             Serial.print("\t");
@@ -548,7 +612,7 @@ void _jctrl_cli_output_periodic() {
             Serial.print("\t");
             Serial.print(targets.motor_torque_ff);
             Serial.print("\t");
-            Serial.print(0); // Motor Temperature
+            Serial.print(cond.temperature); // Motor Temperature
             Serial.print("\t");
             Serial.println(0); // Hall Sensor
 
@@ -565,6 +629,33 @@ void _jctrl_cli_output_periodic() {
         Serial.println(targets.pos_target * RAD2DEG);
 
     }
+    if (cli_out_mode == tune_vel) {
+        drvSys_driveTargets targets = drvSys_get_targets();
+        drvSys_FullDriveState state = drvSys_get_full_drive_state();
+
+        Serial.print(state.motor_vel * RAD2DEG);
+        Serial.print("\t");
+        Serial.print(state.joint_vel * RAD2DEG);
+        Serial.print("\t");
+        Serial.println(targets.vel_target * RAD2DEG);
+
+    }
+    if (cli_out_mode == torque) {
+        drvSys_FullDriveState state = drvSys_get_full_drive_state();
+        float torque = drvSys_get_torque();
+        float raw_torque = drvSys_get_torque(true);
+        float delta_angle = drvSys_get_delta_angle();
+        Serial.print(torque);
+        Serial.print("\t");
+        Serial.print(raw_torque);
+        Serial.print("\t");
+        Serial.print(state.joint_pos * RAD2DEG);
+        Serial.print("\t");
+        Serial.println(delta_angle * RAD2DEG);
+
+    }
+
+
     if (cli_out_mode == nn_inv) {
 
         drvSys_driveState state = drvSys_get_drive_state();
@@ -609,6 +700,12 @@ void _jctrl_cli_output_periodic() {
         Serial.print(current_error * 100);
         Serial.print("\t");
         Serial.println(average_error * 100);
+
+
+    }
+
+    if (cli_out_mode == nn_pid) {
+
 
 
     }

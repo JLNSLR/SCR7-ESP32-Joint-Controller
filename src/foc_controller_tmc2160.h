@@ -51,6 +51,8 @@ public:
     void set_target_torque_9bit(int16_t torque_target);
     void _test_sineLookup(float input);
 
+    void set_max_current(int16_t max_current_mA, float max_torque);
+
     long microseconds = 0;
     bool  input_averaging = true;
 

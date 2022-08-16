@@ -48,6 +48,14 @@ public:
 
     void backlash_compensator(float backlash_thres, float kp, float ki);
 
+    float get_sample_time();
+
+    float* get_internal_gains();
+
+    float double_exp_filter(float value);
+
+    void setInputFilter_double_exp(bool double_exp, float alpha, float gamma);
+
 
     /* ---  working variables --- */
 
@@ -72,6 +80,8 @@ private:
     float kp, ki, kd;
     float lastInput = 0;
 
+    float gains_int[3] = { 0 };
+
     // sample time in microseconds
     int sampleTime; // microseconds
 
@@ -86,6 +96,9 @@ private:
 
     float d_filter_alpha = 0.5;
     float input_exp_filter_alpha = 0.5;
+    bool double_exp = false;
+
+    float gamma_d_exp_filter = 0.5;
 };
 
 #endif // PIDCONTROLLER_H

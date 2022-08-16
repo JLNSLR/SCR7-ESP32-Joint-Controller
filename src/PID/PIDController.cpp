@@ -43,13 +43,22 @@ void PIDController::compute()
 
     error = setpoint - input;
 
+    float error_raw;
 
     /* Compute Output Filter */
     if (outputFilter)
     {
-        error = error * input_exp_filter_alpha + prev_error * (1 - input_exp_filter_alpha);
+        if (double_exp) {
+            error = double_exp_filter(error);
+        }
+        else {
+
+            error = error * input_exp_filter_alpha + prev_error * (1 - input_exp_filter_alpha);
+        }
+
 
     }
+
 
     iTerm += error;
 
@@ -221,6 +230,16 @@ float* PIDController::getGains()
     return gains;
 }
 
+float* PIDController::get_internal_gains()
+{
+
+    gains_int[0] = kp;
+    gains_int[1] = ki;
+    gains_int[2] = kd;
+
+    return gains_int;
+}
+
 void PIDController::setDifferentialFilter(bool isActive, float alpha)
 {
     this->filterDerivative = isActive;
@@ -240,4 +259,35 @@ void PIDController::setErrorDeadBand(float const deadband) {
 bool PIDController::getMode()
 {
     return this->isActive;
+}
+
+float PIDController::get_sample_time() {
+
+    return float(sampleTime) * 1e-6;
+}
+
+
+float PIDController::double_exp_filter(float value) {
+
+    static float output = 0;
+    static float b = 0;
+    float new_output = value * input_exp_filter_alpha + (1 - input_exp_filter_alpha) * (output + b);
+
+    b = gamma_d_exp_filter * (new_output - output) + (1 - gamma_d_exp_filter) * b;
+
+    output = new_output;
+
+    return output;
+}
+
+
+void PIDController::setInputFilter_double_exp(bool double_exp, float alpha, float gamma) {
+
+    this->double_exp = double_exp;
+
+    input_exp_filter_alpha = alpha;
+
+    gamma_d_exp_filter = gamma;
+
+
 }

@@ -10,8 +10,9 @@
             "includePath": [
                 "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/include",
                 "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/src",
-                "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/BLE/src",
+                "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
+                "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/I2C Temperature Sensors derived from the LM75/src",
                 "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/SparkFun Qwiic Scale NAU7802 Arduino Library/src",
                 "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
                 "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/DallasTemperature",
@@ -117,8 +118,9 @@
                 "path": [
                     "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/include",
                     "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/src",
-                    "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/BLE/src",
+                    "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
+                    "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/I2C Temperature Sensors derived from the LM75/src",
                     "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/SparkFun Qwiic Scale NAU7802 Arduino Library/src",
                     "C:/Users/jseil/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
                     "c:/dev/CrudeBot_V2_Project/SCR7-ESP32-Joint-Controller/.pio/libdeps/esp32doit-devkit-v1/DallasTemperature",

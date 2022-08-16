@@ -16,6 +16,9 @@
 #include <drive_system_types.h>
 #include <neural_controller.h>
 #include <closed_loop_stepper_control.h>
+#include <torqueSensor.h>
+#include <Temperature_LM75_Derived.h>
+#include <led_control.h>
 
 #include <Preferences.h>
 
@@ -28,16 +31,19 @@
 /* --- Timing Constants --- */
 #define DRVSYS_FOC_PERIOD_US 200 //us -> 5kHz
 //Encoder Processing
-#define DRVSYS_PROCESS_ENCODERS_PERIOD_US 500 //us -> 3kHz
-#define DRVSYS_PROCESS_ENCODERS_FREQU 2000 //Hz
+#define DRVSYS_PROCESS_ENCODERS_PERIOD_US 400 //us -> 3kHz
+#define DRVSYS_PROCESS_ENCODERS_FREQU 2500 //Hz
 // Torque Target Control 
 #define DRVSYS_CONTROL_TORQUE_PERIOD_US 400 // us 
 #define DRVSYS_CONTROL_TORQUE_FREQU 2500 // Hz
 // PID Controller
-#define DRVSYS_CONTROL_POS_PERIOD_US 1000 //us 2000Hz
-#define DRVSYS_CONTROL_POS_FREQ 1000 //Hz
+#define DRVSYS_CONTROL_POS_PERIOD_US 2000 //us 2000Hz
+#define DRVSYS_CONTROL_POS_FREQ 500 //Hz
+
+#define DRVSYS_CONTROL_VEL_PERIOD_US 500 //us 2000Hz
+#define DRVSYS_CONTROL_VEL_FREQ 2000 //Hz
 // Torque Sensor Processing
-#define DRVSYS_PROCESS_TORQUE_SENSOR_PERIOD_MS 333
+#define DRVSYS_PROCESS_TORQUE_SENSOR_PERIOD_MS 3
 
 // Closed Loop Stepper Controller
 #define DRVSYS_CONTROL_STEPPER_PERIOD_US 500
@@ -48,6 +54,9 @@
 
 //Learning System Dynamics
 #define DRVSYS_LEARNING_PERIOD_MS 2
+
+//Monitoring System 
+#define DRVSYS_MONITOR_PERIOD_MS 1000
 
 /* --- Hardware-Timer-Constants --- */
 #define DRVSYS_TIMER_PRESCALER_DIV 80 // with 80MHz Clock, makes the timer tick every 1us
@@ -162,6 +171,13 @@ void drvSys_set_notch_filter(float notch_frequ, bool activate = false);
 
 void drvSys_set_kalman_filter_acc_noise(float acc_noise, bool joint);
 
+/**
+ * @brief returns torque sensor output, also outputs if the torque sensor is uncalibrated
+ *
+ * @return float  torque sensor value
+ */
+float drvSys_get_torque(bool raw = false);
+
 /* Functions to change persistent parameters (PID Gains etc.) */
 
 void _drvSys_load_parameters_from_Flash();
@@ -178,10 +194,27 @@ void drvSys_reset_alignment_data_on_Flash();
 void drvSys_setOffsets(float motor_offset, float joint_offset, bool save = true, bool reset = false);
 void drvSys_loadOffsets();
 //Controller Gains
-void drvSys_update_PID_gains(drvSys_PID_Gains gains);
-void drvSys_set_pos_PID_gains(float Kp, float Ki, float Kd, bool save = true);
+/**
+ * @brief sets PID gains
+ *
+ * @param pos - bool true -> position controller, false -> velocity controller
+ * @param Kp
+ * @param Ki
+ * @param Kd
+ * @param save - if true saves new gains on flash
+ */
+void drvSys_set_PID_gains(bool pos, float Kp, float Ki, float Kd, bool save = true);
 void drvSys_set_ff_gains(float gain);
-void drvSys_save_pos_PID_gains();
+void drvSys_save_PID_gains();
+
+/**
+ * @brief adapts advanced PID settings
+ *
+ * @param pos  - bool true -> position controller, false -> velocity controller
+ * @param type 0 - input filter alpha; 1 - deadzone
+ * @param value alpha/deadzone
+ */
+void drvSys_adv_PID_settings(bool pos, int type, float value);
 
 void drvSys_limit_torque(float torque_limit);
 
@@ -189,7 +222,7 @@ void drvSys_set_admittance_params(float virtual_spring, float virtual_damping, f
 void drvSys_save_admittance_params();
 
 
-bool _drvSys_read_pos_PID_gains_from_flash();
+bool _drvSys_read_PID_gains_from_flash();
 bool _drvSys_read_admittanceGains_from_flash();
 
 
@@ -243,9 +276,20 @@ float _drvSys_neural_control_predict_torque();
 float drvSys_neural_control_read_predicted_torque();
 drvSys_driveState drvSys_get_emulator_pred();
 
+/**
+ * @brief if torqueboost is active, the maximum phase current is used in foc control instead of the
+ *         nominal phase current. Activated as standard, since FOC control is very efficient.
+ *         Should be turned off if the driver or the motor gets increasingly hot
+ *
+ * @param active
+ */
+void drvSys_set_torque_boost_active(bool active);
+
 float drvSys_get_pid_torque();
 
 float _drvSys_compute_notch_FIR_filter(float input, float* b_coef);
+
+float drvSys_get_delta_angle();
 
 
 /* Interrupt Handler */

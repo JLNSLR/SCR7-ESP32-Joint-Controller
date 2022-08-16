@@ -9,7 +9,7 @@
 #define MOTION_MAX_VEL 140.0*DEG2RAD
 
 #define MOTION_SEQUENCER_CORE 1
-#define MOTION_SEQUENCER_PRIO 7
+#define MOTION_SEQUENCER_PRIO 8
 #define MOTION_SEQUENCER_STACK_SIZE 2000
 
 #define MOTION_SEQUENCER_PERIOD_MS 1
@@ -30,8 +30,13 @@ void set_motion_mode(motion_control_mode);
 
 void set_motion_planner_constraints(float max_vel, float max_acc, float max_jerk);
 
+void start_goto_test_signal();
 
+void stop_test_signal();
 
+void start_sinusoidal_test_signal(float max_acc, float max_frequ);
+
+void _output_test_sinusoid_signal();
 
 
 

@@ -26,6 +26,8 @@ void KinematicKalmanFilter::init(float delta_t) {
     system_matrix_A(2, 2) = 1;
 
     x_current.Fill(0);
+    x_pred.Fill(0);
+    x_corrected.Fill(0);
 
     observer_matrix_H.Fill(0);
     observer_matrix_H(0, 0) = 1;
@@ -33,6 +35,8 @@ void KinematicKalmanFilter::init(float delta_t) {
     observer_matrix_H_vel(1, 1) = 1;
 
     z_n.Fill(0);
+
+    n_iterations = 0;
 
 
     //initial error covariance_matrix;
@@ -102,6 +106,8 @@ void KinematicKalmanFilter::init(float delta_t) {
 
 void KinematicKalmanFilter::predictionStep() {
 
+
+
     x_pred = system_matrix_A * x_current;
 
     errorCovariance = system_matrix_A * errorCovariance * (~system_matrix_A) + system_noise_matrix;
@@ -110,7 +116,7 @@ void KinematicKalmanFilter::predictionStep() {
 
 };
 
-void KinematicKalmanFilter::predictionStep(float motor_torque) {
+void KinematicKalmanFilter::predictionStep_u(float motor_torque) {
     x_pred = system_matrix_A * x_current; // + b_vec * motor_torque;
 
     errorCovariance = system_matrix_A * errorCovariance * (~system_matrix_A) + system_noise_matrix;
@@ -161,6 +167,11 @@ void KinematicKalmanFilter::correctionStep_vel(float velocity_derivative) {
 KinematicStateVector KinematicKalmanFilter::getEstimatedState() {
     KinematicStateVector state;
 
+    if (n_iterations < 100) {
+        x_current(1) = 0;
+        x_current(2) = 0;
+    }
+
     state.acc = x_current(2);
     state.vel = x_current(1);
     state.pos = x_current(0);
@@ -176,6 +187,11 @@ KinematicStateVector KinematicKalmanFilter::estimateStates(float position_sensor
     predictionStep();
 
     correctionStep();
+
+    if (n_iterations <= 100) {
+        n_iterations++;
+    }
+
 
     return getEstimatedState();
 

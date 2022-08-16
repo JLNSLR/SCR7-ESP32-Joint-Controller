@@ -28,14 +28,18 @@ public:
     // Calibration Data
     float internal_offset = 0;
     float external_offset = 0;
-    float conversion_factor = 0.001; // integer value to Nm
+    float conversion_factor = 1.0; // integer value to Nm
 
     // Drift Compensation Parameters
-    float drift_noise_val = 1e-9;
-    float drift_measurement_noise = 30000;
+    float drift_noise_val = 1e-8;
+    float drift_measurement_noise = 50000;
     float initial_drift_val = 0.0;
 
     float damping = 5;
+
+    bool calibrated = false;
+
+    float raw_sensor_val = 0;
 
 
 
