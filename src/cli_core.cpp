@@ -24,7 +24,7 @@ void cli_init() {
         "cli_task", // task name
         5000,      // Stack size (bytes)
         NULL,      // task parameters
-        5,         // task priority
+        8,         // task priority
         &cli_task // task handle
     );
 

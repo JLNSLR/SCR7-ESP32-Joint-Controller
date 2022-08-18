@@ -50,7 +50,7 @@ public:
 
     float get_sample_time();
 
-    float* get_internal_gains();
+    void get_internal_gains(float gains[]);
 
     float double_exp_filter(float value);
 
@@ -72,9 +72,9 @@ public:
 
     bool derivative_on_measurement = true;
 
-    float gains[3];
+    float gains[3] = { 0 };
 
-    bool d_term_vel = true;
+    bool d_term_vel = false;
 
 private:
     float kp, ki, kd;
@@ -83,7 +83,7 @@ private:
     float gains_int[3] = { 0 };
 
     // sample time in microseconds
-    int sampleTime; // microseconds
+    int sampleTime = 1; // microseconds
 
     bool isActive = true;
     bool filterDerivative = false;

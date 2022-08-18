@@ -222,7 +222,7 @@ void PIDController::SetControllerDirection(int Direction)
 float* PIDController::getGains()
 {
 
-    float sampleTimeInSec = ((float)sampleTime / (1000 * 1000));
+    float sampleTimeInSec = ((float)sampleTime * 1e-6);
     gains[0] = kp;
     gains[1] = ki / sampleTimeInSec;
     gains[2] = kd * sampleTimeInSec;
@@ -230,14 +230,13 @@ float* PIDController::getGains()
     return gains;
 }
 
-float* PIDController::get_internal_gains()
+void PIDController::get_internal_gains(float gains[])
 {
 
-    gains_int[0] = kp;
-    gains_int[1] = ki;
-    gains_int[2] = kd;
+    gains[0] = kp;
+    gains[1] = ki;
+    gains[2] = kd;
 
-    return gains_int;
 }
 
 void PIDController::setDifferentialFilter(bool isActive, float alpha)

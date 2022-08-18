@@ -62,6 +62,8 @@ public:
     float backpropagation(float* inputs, float loss, float* loss_derivatives);
 
     float* predict(float input_vector[]);
+
+    void predict(float input_vector[], float output_vector[]);
     void set_input(float input_vector[]);
     float* get_output();
 

@@ -9,7 +9,7 @@ enum drvSys_controlMode { direct_torque, closed_loop_foc, admittance_control, st
 /* Drive System Priority constants */
 enum drvSys_priorities {
     foc_prio = 10, process_sensor_prio = 10, torque_control_prio = 9,
-    pid_dual_control_prio = 9, admittance_control_prio = 6, learn_dynamics_prio = 7, stepper_control_prio = 10, torque_sense_prio = 8, monitor_prio = 5
+    pid_dual_control_prio = 9, admittance_control_prio = 6, learn_dynamics_prio = 5, stepper_control_prio = 10, torque_sense_prio = 8, monitor_prio = 7
 };
 
 struct drvSys_PID_Gains {
@@ -106,6 +106,15 @@ struct drvSys_controllerCondition {
     int fan_level;
     bool neural_control_active;
 };
+
+struct cascade_gains {
+    float pos_Kp;
+    float pos_Ki;
+    float pos_Kd;
+    float vel_Kp;
+    float vel_Ki;
+};
+
 
 
 

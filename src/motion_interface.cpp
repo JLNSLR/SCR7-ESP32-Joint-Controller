@@ -130,18 +130,25 @@ void _motion_sequencer_task(void* parameters) {
         if (test_goto_active) {
             if (counter % 100 == 0) {
 
-                float dir = 1.0;
+                static float dir = 1.0;
                 float target = 0;
                 float acc = 0;
+                static int no_traj_counter = 0;
                 if (!motion_planner.executing_traj_flag) {
-                    target = (float(rand()) / float(RAND_MAX)) * 175;
-                    if (counter % 5 == 0) {
-                        dir = -dir;
-                    }
-                    float vel = (float(rand()) / float(RAND_MAX)) * 60.0;
-                    acc = (float(rand()) / float(RAND_MAX)) * 1000.0;
 
-                    handle_motion_command(target * DEG2RAD * dir, vel * DEG2RAD, acc * DEG2RAD);
+                    no_traj_counter++;
+
+                    if (no_traj_counter % 10 == 0) {
+                        no_traj_counter = 0;
+                        target = (float(rand()) / float(RAND_MAX)) * 90;
+                        if (float(rand()) / float(RAND_MAX) > 0.5) {
+                            dir = -dir;
+                        }
+                        float vel = (float(rand()) / float(RAND_MAX)) * 40.0 + 3.0;
+                        acc = (float(rand()) / float(RAND_MAX)) * 100.0 + 5.0;
+
+                        handle_motion_command(target * DEG2RAD * dir, vel * DEG2RAD, acc * DEG2RAD);
+                    }
                 }
 
 
@@ -205,6 +212,8 @@ void _output_test_sinusoid_signal() {
     static int f_counter = 0;
     static float frequ = 0.0001;
 
+    static bool frequ_change = false;
+
     if (reset_test_sig) {
         frequ = 0.0001;
         n_counter = 0;
@@ -215,17 +224,19 @@ void _output_test_sinusoid_signal() {
 
     float t = n_counter * delta_t;
 
-    test_sine_data.max_acc = 100;
+    test_sine_data.max_acc = 1000;
 
     float pos_amplitude = 90.0 * DEG2RAD;
     float acc_amplitude = pos_amplitude * (2.0 * PI * frequ) * (2.0 * PI * frequ);
     float vel_amplitude = pos_amplitude * (2.0 * PI * frequ);
 
+    /*
     if (acc_amplitude > test_sine_data.max_acc) {
         pos_amplitude = test_sine_data.max_acc * (1.0 / (2.0 * PI * frequ));
         vel_amplitude = test_sine_data.max_acc * (1.0 / (2.0 * PI * frequ));
         acc_amplitude = test_sine_data.max_acc;
     }
+    */
 
     float acc = -acc_amplitude * sin(2.0 * PI * frequ * t);
     float vel = vel_amplitude * cos(2.0 * PI * frequ * t);
@@ -241,13 +252,19 @@ void _output_test_sinusoid_signal() {
     n_counter++;
 
 
-    if (n_counter % 10000 == 0) {
+    if (pos < 0.001 && pos > 0 && frequ_change == false) {
         frequ = frequ + delta_frequ;
-
-        if (frequ > test_sine_data.max_frequ) {
-            frequ = 0.001;
-        }
+        frequ_change = true;
     }
+
+    if (abs(pos) > 0.3) {
+        frequ_change = false;
+    }
+
+    if (frequ > test_sine_data.max_frequ) {
+        frequ = 0.0001;
+    }
+
 
     drvSys_driveTargets target;
     target.acc_target = acc;

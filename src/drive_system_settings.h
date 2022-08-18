@@ -5,6 +5,63 @@
 #define DEG2RAD 0.01745329251994329576923690768489
 #define RAD2DEG 57.295779513082320876798154814105
 
+/* ##########################################################################
+############## ----Constant Drive System Parameters----####################
+############################################################################* /
+
+
+/* --- Timing Constants --- */
+#define DRVSYS_FOC_PERIOD_US 200 //us -> 5kHz
+//Encoder Processing
+#define DRVSYS_PROCESS_ENCODERS_PERIOD_US 400 //us -> 3kHz
+#define DRVSYS_PROCESS_ENCODERS_FREQU 2500 //Hz
+// Torque Target Control 
+#define DRVSYS_CONTROL_TORQUE_PERIOD_US 400 // us 
+#define DRVSYS_CONTROL_TORQUE_FREQU 2500 // Hz
+// PID Controller
+#define DRVSYS_CONTROL_POS_PERIOD_US 2000 //us 2000Hz
+#define DRVSYS_CONTROL_POS_FREQ 500 //Hz
+
+#define DRVSYS_CONTROL_VEL_PERIOD_US 500 //us 2000Hz
+#define DRVSYS_CONTROL_VEL_FREQ 2000 //Hz
+// Torque Sensor Processing
+#define DRVSYS_PROCESS_TORQUE_SENSOR_PERIOD_MS 3
+
+// Closed Loop Stepper Controller
+#define DRVSYS_CONTROL_STEPPER_PERIOD_US 500
+#define DRVSYS_CONTROL_STEPPER_FREQU 2000 //Hz
+
+//Admittance Controller
+#define DRVSYS_CONTROL_ADMITTANCE_PERIOD_MS 5
+
+//Learning System Dynamics
+#define DRVSYS_LEARNING_PERIOD_MS 5
+
+//Monitoring System 
+#define DRVSYS_MONITOR_PERIOD_MS 1000
+
+/* --- Hardware-Timer-Constants --- */
+#define DRVSYS_TIMER_PRESCALER_DIV 80 // with 80MHz Clock, makes the timer tick every 1us
+#define DRVSYS_TIMER_ALARM_RATE_US 50 //generate timer alarm every 50us
+
+/* Allow Calibrations */
+
+#define ALLOW_ENCODER_CALIBRATION_ROUTINE
+
+#define ALLOW_AXIS_ALIGN_CALIBRATION
+
+//#define ALLOW_ELECTRIC_ANGLE_CALIBRATION // DANGEROUS IN ASSEMBLED ROBOT AXIS
+// ----- DANGEROUS !!! ----- 
+// USE ONLY WITH MOTOR THAT IS NOT ATTACHED TO ROBOT GEAR SYSTEM
+// MOTOR CALIBRATION COULD DAMAGE ROBOT
+// INTENDED TO USE TO OBTAIN MOTOR SPECIFIC ELECTRIC ANGLE OFFSET FOR FOC CONTROL
+// is required, since foc control of 50 Pole Stepper motor and noisy 14 bit encoder with delay 
+// is pushing the limits. Calibrating via Coil energizing does not deliver accurat enough results
+// and slight offset diminishes control so severely that the use of FOC control is rendered useless
+// since the magnetic field will be off that much, that for higher velocities makes the motor cog,
+// inefficient 
+
+
 /*########################################################################
 ############## --- Joint Independent Standard Settings --- ###############
 ######################################################################## */
@@ -25,7 +82,7 @@
 #define DRVSYS_STACKSIZE_PID_CONTROLLER_TASK 3000
 #define DRVSYS_STACKSIZE_ADMITTANCE_CONTROLLER_TASK 2000
 #define DRVSYS_STACKSIZE_PROCESS_TORQUE_SENSOR_TASK 1000
-#define DRVSYS_STACKSIZE_LEARN_DYNAMICS_TASK 10000
+#define DRVSYS_STACKSIZE_LEARN_DYNAMICS_TASK 20000
 #define DRVSYS_STACKSIZE_LEARN_PID_GAINS_TASK 10000
 #define DRVSYS_STACKSIZE_STEPPER_CONTROL_TASK 3000
 #define DRVSYS_STACKSIZE_TORQUE_SENSE_TASK 2000
@@ -57,7 +114,7 @@
 
 #define TEMP_SENSOR_AVAILABLE 1
 #define FAN_AVAILABLE 1
-#define FAN_12V 1
+#define FAN_12V 0
 #define FAN_24V 0
 #define N_LEDS 1
 
@@ -99,8 +156,8 @@
 #define FOC_EMPIRIC_PHASE_ANGLE_OFFSET 7860
 
 // --- Kinematic Constraints --- //
-#define DRVSYS_POS_LIMIT_HIGH 175.0*DEG2RAD
-#define DRVSYS_POS_LIMIT_LOW -175.0*DEG2RAD
+#define DRVSYS_POS_LIMIT_HIGH 110.0*DEG2RAD
+#define DRVSYS_POS_LIMIT_LOW -110.0*DEG2RAD
 
 #define DRVSYS_VEL_MAX 90.0*DEG2RAD // deg/s
 #define DRVSYS_ACC_MAX 100.0*DEG2RAD//deg/s^
@@ -159,7 +216,7 @@
 #define DRVSYS_NN_CONTROL_AUTO_ACTIVE 0
 
 
-#define DRVSYS_NN_CONTROL_BANDWIDTH 100
+#define DRVSYS_NN_CONTROL_BANDWIDTH 400
 
 
 

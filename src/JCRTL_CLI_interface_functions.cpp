@@ -290,6 +290,11 @@ bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]) {
             cli_out_mode = load_control;
             return processed;
         }
+        if (strcmp(mode, "nn_pid") == 0) {
+            cli_output_active = true;
+            cli_out_mode = nn_pid;
+            return processed;
+        }
 
 
     }
@@ -680,6 +685,7 @@ void _jctrl_cli_output_periodic() {
 
         drvSys_driveState state_pred = drvSys_get_emulator_pred();
 
+
         const drvSys_driveState actual_state = drvSys_get_drive_state();
 
         float current_error = drvSys_get_neural_control_error(0, 0);
@@ -702,11 +708,47 @@ void _jctrl_cli_output_periodic() {
         Serial.println(average_error * 100);
 
 
+
     }
 
     if (cli_out_mode == nn_pid) {
 
+        drvSys_driveTargets targets = drvSys_get_targets();
+        drvSys_FullDriveState state = drvSys_get_full_drive_state();
 
+        drvSys_PID_Gains gains_pos = drvSys_get_PID_gains(true);
+        drvSys_PID_Gains gains_vel = drvSys_get_PID_gains(false);
+
+        float current_error = drvSys_pid_tuner_error(false);
+        float average_error = drvSys_pid_tuner_error(true);
+
+        Serial.print(state.joint_pos * RAD2DEG);
+        Serial.print("\t");
+        Serial.print(state.joint_vel * RAD2DEG);
+        Serial.print("\t");
+        Serial.print(state.joint_acc * RAD2DEG);
+        Serial.print("\t");
+        Serial.print(state.motor_torque);
+        Serial.print("\t");
+        Serial.print(state.joint_torque);
+        Serial.print("\t");
+        Serial.print(targets.pos_target * RAD2DEG);
+        Serial.print("\t");
+        Serial.print(targets.vel_target * RAD2DEG);
+        Serial.print("\t");
+        Serial.print(gains_pos.K_p, 8);
+        Serial.print("\t");
+        Serial.print(gains_pos.K_i, 8);
+        Serial.print("\t");
+        Serial.print(gains_pos.K_d, 8);
+        Serial.print("\t");
+        Serial.print(gains_vel.K_p, 8);
+        Serial.print("\t");
+        Serial.print(gains_vel.K_i, 8);
+        Serial.print("\t");
+        Serial.print(current_error);
+        Serial.print("\t");
+        Serial.println(average_error);
 
     }
 }

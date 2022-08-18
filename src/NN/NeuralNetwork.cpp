@@ -180,6 +180,16 @@ float* NeuralNetwork::predict(float input_vector[]) {
     return neuron_outputs[depth - 1];
 }
 
+void NeuralNetwork::predict(float input_vector[], float output_vector[]) {
+    set_input(input_vector);
+    propagate_forward();
+
+    for (int i = 0; i < width[depth - 1]; i++) {
+        output_vector[i] = neuron_outputs[depth - 1][i];
+        //Serial.println(output_vector[0]);
+    }
+}
+
 float* NeuralNetwork::get_output() {
     return neuron_outputs[depth - 1];
 }
@@ -870,7 +880,7 @@ void NeuralNetwork::init_weights_randomly(float max, float min) {
 
 float NeuralNetwork::apply_activation_function(float x, int layer) {
 
-    nn_activation_f function_type = activation_function_per_layer[layer];
+    nn_activation_f function_type = activation_function_per_layer[layer-1];
 
     if (function_type == ReLu) {
         return f_ReLu(x);
@@ -886,7 +896,7 @@ float NeuralNetwork::apply_activation_function(float x, int layer) {
 
 float NeuralNetwork::grad_activation_function(float x, int layer) {
 
-    nn_activation_f function_type = activation_function_per_layer[layer];
+    nn_activation_f function_type = activation_function_per_layer[layer - 1];
 
     if (function_type == ReLu) {
         return grad_ReLu(x);
@@ -910,10 +920,15 @@ float NeuralNetwork::random_float(float max, float min) {
 
 float NeuralNetwork::f_ReLu(float x) {
 
-    if (x > 0) {
+    if (x > 0.0) {
+
         return x;
     }
-    return 0.0;
+    else {
+
+        return 0.0;
+    }
+
 
 }
 
