@@ -128,7 +128,7 @@ void _motion_sequencer_task(void* parameters) {
         counter++;
 
         if (test_goto_active) {
-            if (counter % 100 == 0) {
+            if (counter % 500 == 0) {
 
                 static float dir = 1.0;
                 float target = 0;
@@ -144,7 +144,7 @@ void _motion_sequencer_task(void* parameters) {
                         if (float(rand()) / float(RAND_MAX) > 0.5) {
                             dir = -dir;
                         }
-                        float vel = (float(rand()) / float(RAND_MAX)) * 40.0 + 3.0;
+                        float vel = (float(rand()) / float(RAND_MAX)) * 30.0 + 3.0;
                         acc = (float(rand()) / float(RAND_MAX)) * 100.0 + 5.0;
 
                         handle_motion_command(target * DEG2RAD * dir, vel * DEG2RAD, acc * DEG2RAD);

@@ -12,7 +12,7 @@
 #define MOTION_SEQUENCER_PRIO 8
 #define MOTION_SEQUENCER_STACK_SIZE 2000
 
-#define MOTION_SEQUENCER_PERIOD_MS 1
+#define MOTION_SEQUENCER_PERIOD_MS 2
 
 extern MotionPlanner motion_planner;
 

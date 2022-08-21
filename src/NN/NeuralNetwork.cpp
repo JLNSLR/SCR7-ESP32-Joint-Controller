@@ -427,7 +427,6 @@ float NeuralNetwork::backpropagation(float* inputs, float* targets) {
 
     for (int output_neuron_n = 0; output_neuron_n < width[depth - 1]; output_neuron_n++) {
         //Calculate loss between the target and the output of the last layer
-
         float output_error = neuron_outputs[depth - 1][output_neuron_n] - targets[output_neuron_n];
         diff_fct_out loss = get_loss(output_error, loss_type);
 
@@ -452,7 +451,7 @@ float NeuralNetwork::backpropagation(float* inputs, float* targets) {
 
 
         loss_sum += loss.x;
-        total_output_error += output_error;
+        total_output_error += abs(output_error);
 
     }
 
@@ -880,7 +879,7 @@ void NeuralNetwork::init_weights_randomly(float max, float min) {
 
 float NeuralNetwork::apply_activation_function(float x, int layer) {
 
-    nn_activation_f function_type = activation_function_per_layer[layer-1];
+    nn_activation_f function_type = activation_function_per_layer[layer - 1];
 
     if (function_type == ReLu) {
         return f_ReLu(x);

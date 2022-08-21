@@ -11,9 +11,8 @@
 #include <drive_system.h>
 
 
-#define BUFFERSIZE 100
-#define EMULATOR
-#define INVERSE_DYN
+#define BUFFERSIZE 20
+
 
 
 //#define NN_CONTROL_DEBUG
@@ -80,8 +79,6 @@ struct pid_tune_sample {
     float pos_iTerm;
     float vel_iTerm;
 
-
-
 };
 
 struct full_neural_control_sample {
@@ -99,9 +96,7 @@ public:
     void add_sample(drvSys_FullDriveStateTimeSample sample, drvSys_driveTargets targets);
     void learning_step_emulator();
     drvSys_driveState emulator_predict_next_state(drvSys_FullDriveState current_state);
-
     float predict_control_torque(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
-    //float inverse_dynamics_predict_torque(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
     void learning_step_controller();
 
     void learning_step_inverse_dyn();
@@ -117,14 +112,14 @@ public:
     cascade_gains predict_gains(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
 
 
-
     NeuralNetwork* emulator_nn;
     NeuralNetwork* controller_nn;
-    //NeuralNetwork* inverse_dyn_nn;
     NeuralNetwork* adaptive_pid_nn;
+
+
     float emulator_error = 0;
-    float average_emulator_error = 1e1;
-    float average_control_error = 1e1;
+    float average_emulator_error = 1;
+    float average_control_error = 1;
     float control_error = 0;
     bool control_net_pretrained = false;
     bool pid_net_pretrained = false;
@@ -145,43 +140,38 @@ private:
     int emulator_width[emulator_depth] = { 8,8,5,3 };
     nn_activation_f emulator_act[emulator_depth - 1] = { leakyReLu,leakyReLu,Linear };
 
-    CircularBuffer<full_neural_control_sample, BUFFERSIZE> training_buffer_input;
+    CircularBuffer<full_neural_control_sample, BUFFERSIZE > training_buffer_input;
     CircularBuffer<full_neural_control_sample, BUFFERSIZE> training_buffer;
-    CircularBuffer<pid_tune_sample, 20> pid_training_buffer;
-    CircularBuffer<pid_tune_sample, 20> pid_training_buffer_input;
+    CircularBuffer<pid_tune_sample, BUFFERSIZE> pid_training_buffer;
+    CircularBuffer<pid_tune_sample, BUFFERSIZE> pid_training_buffer_input;
 
     emulator_sample get_emulator_sample(drvSys_FullDriveStateTimeSample data);
 
     SemaphoreHandle_t mutex_training_buffer;
     SemaphoreHandle_t mutex_emulator;
-    SemaphoreHandle_t mutex_controller;
-    //SemaphoreHandle_t mutex_inv_dyn;
+    SemaphoreHandle_t mutex_ff_controller;
 
     SemaphoreHandle_t mutex_pid_training_buffer;
     SemaphoreHandle_t mutex_pid_net;
 
     char emulator_name[7] = "emu_nn";
-    char controller_name[9] = "contr_nn";
+    char controller_name[9] = "inv_nn";
     char pid_tuner_name[7] = "pid_nn";
-    //char inv_name[7] = "inv_nn";
 
 
 
-    static const int controller_depth = 5;
-    int controller_width[controller_depth] = { 10,12,8,6,1 };
-    nn_activation_f controller_act[controller_depth - 1] = { leakyReLu,leakyReLu,leakyReLu,Linear };
 
-    /*
-    static const int inv_depth = 4;
-    int inv_width[inv_depth] = { 10,12,6,1 };
-    nn_activation_f inv_act[inv_depth - 1] = { leakyReLu,leakyReLu,Linear };
-    */
+    static const int controller_depth = 4;
+    int controller_width[controller_depth] = { 10,12,6,1 };
+    nn_activation_f controller_act[controller_depth - 1] = { leakyReLu,leakyReLu,Linear };
+
+
     static const int pid_adapt_depth = 4;
     int pid_adapt_width[pid_adapt_depth] = { 10,8,5,5 };
     nn_activation_f pid_adapt_act[pid_adapt_depth - 1] = { leakyReLu, leakyReLu,ReLu };
 
-    pid_tune_sample current_pid_sample;
 
+    pid_tune_sample current_pid_sample;
     emulator_sample current_sample;
 
     const float max_angle = 180.0 * DEG2RAD;
