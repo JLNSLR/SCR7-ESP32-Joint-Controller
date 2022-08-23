@@ -107,7 +107,7 @@ struct drvSys_controllerCondition {
     bool neural_control_active;
 };
 
-struct cascade_gains {
+struct drvSys_cascade_gains {
     float pos_Kp;
     float pos_Ki;
     float pos_Kd;

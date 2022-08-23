@@ -331,8 +331,7 @@ bool jctrl_cli_process_nn_commands(char(*cli_arg)[N_MAX_ARGS]) {
 
     if (strcmp(keyword, "nn") == 0) {
         processed = true;
-        char* type = cli_arg[1];
-        char* command = cli_arg[2];
+        char* command = cli_arg[1];
         float value = atof(cli_arg[3]);
 
 
@@ -381,8 +380,8 @@ bool jctrl_cli_process_nn_commands(char(*cli_arg)[N_MAX_ARGS]) {
             drvSys_neural_control_save_nets(true);
 
         }
-        if (strcmp(type, "act") == 0) {
-            int a = atoi(command);
+        if (strcmp(command, "act") == 0) {
+            int a = atoi(cli_arg[3]);
             drvSys_neural_control_activate(a);
         }
     }

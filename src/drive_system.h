@@ -219,7 +219,7 @@ float _drvSys_neural_control_predict_torque();
 float drvSys_neural_control_read_predicted_torque();
 drvSys_driveState drvSys_get_emulator_pred();
 
-cascade_gains _drvSys_predict_pid_gains();
+drvSys_cascade_gains _drvSys_predict_pid_gains();
 
 float drvSys_pid_tuner_error(bool average = false);
 

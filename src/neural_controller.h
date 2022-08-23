@@ -13,6 +13,8 @@
 
 #define BUFFERSIZE 20
 
+#define PID_TUNE_DAMPING 1e-1 // (the lower this value, the more conservative (smaller Gains) the adaptive Tuning will be)
+
 
 
 //#define NN_CONTROL_DEBUG
@@ -97,38 +99,37 @@ public:
     void learning_step_emulator();
     drvSys_driveState emulator_predict_next_state(drvSys_FullDriveState current_state);
     float predict_control_torque(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
-    void learning_step_controller();
-
-    void learning_step_inverse_dyn();
+    void learning_step_error_fb_network();
 
     void save_emulator_network();
-    void save_controller_network();
+    void save_error_fb_network();
+    void save_control_network();
     void reset_emulator_network();
-    void reset_controller_network();
+    void reset_error_fb_network();
+    void reset_control_network();
 
-    void init_pid_learner(const PIDController pos_controller, const PIDController vel_controller);
+    void init_pid_learner();
     void add_pid_sample(drvSys_FullDriveState current_state, drvSys_driveTargets targets, float pos_err_sum, float pos_prev_err, float vel_err_sum);
     void learning_step_pid_tuner();
-    cascade_gains predict_gains(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
+    drvSys_cascade_gains predict_gains(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
 
 
     NeuralNetwork* emulator_nn;
+    NeuralNetwork* error_feedback_nn;
     NeuralNetwork* controller_nn;
-    NeuralNetwork* adaptive_pid_nn;
-
 
     float emulator_error = 0;
     float average_emulator_error = 1;
     float average_control_error = 1;
     float control_error = 0;
-    bool control_net_pretrained = false;
+    bool error_fb_net_pretrained = false;
     bool pid_net_pretrained = false;
     bool emu_net_pretrained = false;
     float control_effort_penalty = 1.0;
 
+
     float pid_control_error = 0;
     float average_pid_control_error = 0;
-
 
     float inv_dyn_error = 0;
 
@@ -152,23 +153,21 @@ private:
     SemaphoreHandle_t mutex_ff_controller;
 
     SemaphoreHandle_t mutex_pid_training_buffer;
-    SemaphoreHandle_t mutex_pid_net;
+    SemaphoreHandle_t mutex_control_net;
 
     char emulator_name[7] = "emu_nn";
-    char controller_name[9] = "inv_nn";
-    char pid_tuner_name[7] = "pid_nn";
+    char error_fb_nn_name[9] = "ff_nn";
+    char controller_nn_name[7] = "c_nn";
 
 
+    static const int error_fb_depth = 4;
+    int error_fb_width[error_fb_depth] = { 8,12,8,1 };
+    nn_activation_f error_fb_act[error_fb_depth - 1] = { leakyReLu,leakyReLu,Linear };
 
 
-    static const int controller_depth = 4;
-    int controller_width[controller_depth] = { 10,12,6,1 };
-    nn_activation_f controller_act[controller_depth - 1] = { leakyReLu,leakyReLu,Linear };
-
-
-    static const int pid_adapt_depth = 4;
-    int pid_adapt_width[pid_adapt_depth] = { 10,8,5,5 };
-    nn_activation_f pid_adapt_act[pid_adapt_depth - 1] = { leakyReLu, leakyReLu,ReLu };
+    static const int controller_nn_depth = 4;
+    int controller_nn_width[controller_nn_depth] = { 10,12,10,5 };
+    nn_activation_f controller_nn_act[controller_nn_depth - 1] = { leakyReLu, leakyReLu,Linear };
 
 
     pid_tune_sample current_pid_sample;
@@ -189,6 +188,8 @@ private:
     float vel_sample_time_s = DRVSYS_CONTROL_VEL_PERIOD_US * 1e-6;
 
     float vel_input_filter_alpha = DRVSYS_VEL_PID_INPUT_FILTER_ALPHA;
+
+    float abs_grad(float x);
 
 
 };
