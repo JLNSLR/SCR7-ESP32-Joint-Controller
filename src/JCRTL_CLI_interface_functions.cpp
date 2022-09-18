@@ -301,6 +301,75 @@ bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]) {
     return processed;
 }
 
+bool jctrl_cli_process_controller_state_command(char(*cli_arg)[N_MAX_ARGS]) {
+
+    char* keyword = cli_arg[0];
+    bool processed = false;
+
+    if (strcmp(keyword, "state") == 0) {
+        processed = true;
+        drvSys_controllerCondition state = drvSys_get_controllerState();
+
+        Serial.print("Control Mode: ");
+        String control_mode;
+        if (state.control_mode == direct_torque) {
+            control_mode = "Direct Torque";
+        }
+        if (state.control_mode == closed_loop_foc) {
+            control_mode = "Closed Loop FOC";
+        }
+        if (state.control_mode == admittance_control) {
+            control_mode = "Admittance Control";
+        }
+        if (state.control_mode == stepper_mode) {
+            control_mode = "Stepper";
+        }
+
+        Serial.println(control_mode);
+
+        Serial.print("Controller State: ");
+        String state_flag;
+        if (state.state_flag == error) {
+            state_flag = "Error";
+        }
+        if (state.state_flag == not_ready) {
+            state_flag = "Not ready";
+        }
+        if (state.state_flag == closed_loop_control_active) {
+            state_flag = "Closed Loop Control Active";
+        }
+        if (state.state_flag == closed_loop_control_inactive) {
+            state_flag = "Closed Loop Control Inactive";
+        }
+        Serial.println(state_flag);
+
+        Serial.print("Calibrated: ");
+        Serial.println(state.calibrated);
+
+        Serial.print("Hit negative limit: ");
+        Serial.println(state.hit_neg_limit);
+        Serial.print("Hit positive limit: ");
+        Serial.println(state.hit_positive_limit);
+
+        Serial.print("Overtemperature: ");
+        Serial.println(state.overtemperature);
+
+        Serial.print("Temperature Warning ");
+        Serial.println(state.temperature_warning);
+
+        Serial.print("Driver Temperature: ");
+        Serial.println(state.temperature);
+
+        Serial.print("Fan Level: ");
+        Serial.println(state.fan_level);
+
+        Serial.print("Neural Control Error Feedback Control active: ");
+        Serial.println(state.neural_control_active);
+
+    }
+    return processed;
+}
+
 bool jctrl_cli_process_adapt_kalman(char(*cli_arg)[N_MAX_ARGS]) {
 
     char* keyword = cli_arg[0];
@@ -334,48 +403,12 @@ bool jctrl_cli_process_nn_commands(char(*cli_arg)[N_MAX_ARGS]) {
         char* command = cli_arg[1];
         float value = atof(cli_arg[3]);
 
-
-        //float acc_noise = atof(acc);
-
-        int net_select = 0;
-
-        if (strcmp(type, "c") == 0) {
-
-            net_select = 1;
-        }
-        else if (strcmp(type, "emu") == 0) {
-            net_select = 0;
-        }
-        if (strcmp(command, "lr") == 0) {
-
-            drvSys_adapt_nn_parameter(net_select, 0, value);
-        }
-        if (strcmp(command, "grad") == 0) {
-
-            drvSys_adapt_nn_parameter(net_select, 1, value);
-        }
-        if (strcmp(command, "lr_min") == 0) {
-
-            drvSys_adapt_nn_parameter(net_select, 2, value);
-        }
-        if (strcmp(command, "lr_e") == 0) {
-
-            drvSys_adapt_nn_parameter(net_select, 3, value);
-        }
-        if (strcmp(command, "lr_max") == 0) {
-
-            drvSys_adapt_nn_parameter(net_select, 4, value);
-        }
-        if (strcmp(command, "lr_sch") == 0) {
-
-            drvSys_adapt_nn_parameter(net_select, 5, value);
-        }
         if (strcmp(command, "s") == 0) {
 
             drvSys_neural_control_save_nets(false);
 
         }
-        if (strcmp(command, "res") == 0 || strcmp(command, "res") == 0) {
+        if (strcmp(command, "res") == 0 || strcmp(command, "r") == 0) {
 
             drvSys_neural_control_save_nets(true);
 
@@ -718,8 +751,8 @@ void _jctrl_cli_output_periodic() {
         drvSys_PID_Gains gains_pos = drvSys_get_PID_gains(true);
         drvSys_PID_Gains gains_vel = drvSys_get_PID_gains(false);
 
-        float current_error = drvSys_pid_tuner_error(false);
-        float average_error = drvSys_pid_tuner_error(true);
+        float current_error = drvSys_pid_nn_error(false);
+        float average_error = drvSys_pid_nn_error(true);
 
         Serial.print(state.joint_pos * RAD2DEG);
         Serial.print("\t");

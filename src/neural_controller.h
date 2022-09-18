@@ -13,10 +13,6 @@
 
 #define BUFFERSIZE 20
 
-#define PID_TUNE_DAMPING 1e-1 // (the lower this value, the more conservative (smaller Gains) the adaptive Tuning will be)
-
-
-
 //#define NN_CONTROL_DEBUG
 
 union emulator_sample {
@@ -108,7 +104,6 @@ public:
     void reset_error_fb_network();
     void reset_control_network();
 
-    void init_pid_learner();
     void add_pid_sample(drvSys_FullDriveState current_state, drvSys_driveTargets targets, float pos_err_sum, float pos_prev_err, float vel_err_sum);
     void learning_step_pid_tuner();
     drvSys_cascade_gains predict_gains(drvSys_FullDriveState current_state, drvSys_driveTargets targets);
@@ -190,6 +185,8 @@ private:
     float vel_input_filter_alpha = DRVSYS_VEL_PID_INPUT_FILTER_ALPHA;
 
     float abs_grad(float x);
+
+    float pid_nn_regularization = DRVSYS_PIDNN_LEARNING_REGULARIZATION;
 
 
 };

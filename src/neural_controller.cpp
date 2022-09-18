@@ -295,11 +295,11 @@ void NeuralController::learning_step_error_fb_network() {
 
 
         float input_vector[10] = { 0 };
-        input_vector[0] = sample.state_sample.state.joint_pos * inv_max_angle;
-        input_vector[1] = sample.state_sample.state.joint_vel * inv_max_vel;
-        input_vector[2] = sample.state_sample.state.motor_pos * inv_max_angle;
-        input_vector[3] = sample.state_sample.state.motor_vel * inv_max_vel;
-        input_vector[4] = sample.state_sample.state.joint_torque * inv_max_joint_torque;
+        input_vector[0] = sample.state_sample.state_prev.joint_pos * inv_max_angle;
+        input_vector[1] = sample.state_sample.state_prev.joint_vel * inv_max_vel;
+        input_vector[2] = sample.state_sample.state_prev.motor_pos * inv_max_angle;
+        input_vector[3] = sample.state_sample.state_prev.motor_vel * inv_max_vel;
+        input_vector[4] = sample.state_sample.state_prev.joint_torque * inv_max_joint_torque;
         input_vector[5] = sample.target_sample.pos_target * inv_max_angle;
         input_vector[6] = sample.target_sample.vel_target * inv_max_vel;
         input_vector[7] = sample.target_sample.acc_target * inv_max_acc;
@@ -751,7 +751,7 @@ void NeuralController::learning_step_pid_tuner() {
     Serial.println(delta_Kd_pos, 4);
 #endif
 
-    float reg_penalty = PID_TUNE_DAMPING;
+    float reg_penalty = pid_nn_regularization;
 
 
     static float loss_gains[6] = { 0 };
@@ -764,23 +764,10 @@ void NeuralController::learning_step_pid_tuner() {
     loss_gains[4] = abs_grad(acc_ff_gain) * (delta_acc_ff + reg_penalty * 0.1 * gains_arr[4] * gains_arr[4] * gains_arr[4]);
 #ifdef PID_LEARN_DEBUG
     Serial.println("losses");
-#endif
-
-    const float grad_limit = 1.0;
-    for (int i = 0; i < 5; i++) {
-
-        /*
-        if (loss_gains[i] > grad_limit) {
-            loss_gains[i] = grad_limit;
-        }
-        if (loss_gains[i] < -grad_limit) {
-            loss_gains[i] = -grad_limit;
-        }---
-        */
-#ifdef PID_LEARN_DEBUG
         Serial.println(loss_gains[i], 4);
 #endif
-    }
+
+
     xSemaphoreTake(mutex_control_net, portMAX_DELAY);
     controller_nn->backpropagation(inputs, pid_control_error, loss_gains);
 

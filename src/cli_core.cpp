@@ -116,6 +116,9 @@ void cli_execute_line_cmd() {
     if (!processed_cmd) {
         processed_cmd = jctrl_cli_process_trajectory_command(cli_args);
     }
+     if (!processed_cmd) {
+        processed_cmd = jctrl_cli_process_controller_state_command(cli_args);
+    }
 
 
 

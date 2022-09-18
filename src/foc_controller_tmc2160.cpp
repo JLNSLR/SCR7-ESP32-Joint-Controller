@@ -131,19 +131,19 @@ int32_t sign(int32_t value) {
 void FOCController::foc_control() {
     // variables for velocity compensation
 
-    static long last_micros = 0;
+    //static long last_micros = 0;
 
-    static float delay_normalizer_us = 1.0 / 200.0; // 1/200us
+    //static float delay_normalizer_us = 1.0 / 100.0; // 1/200us
 
-    long current_micros = micros();
+    // long current_micros = micros();
 
-    long passed_micros = current_micros - last_micros;
+     //long passed_micros = current_micros - last_micros;
 
 
-    float  delta_angle_factor = passed_micros * delay_normalizer_us;
+     //float  delta_angle_factor = passed_micros * delay_normalizer_us;
 
-    //Serial.println(passed_micros);
-    last_micros = current_micros;
+     //Serial.println(passed_micros);
+     //last_micros = current_micros;
 
     static int32_t prev_delta_angle = 0;
     static int32_t prev_angle = 0;
@@ -151,21 +151,23 @@ void FOCController::foc_control() {
     // obtain current motor angle
 
     xSemaphoreTake(foc_spi_mutex, portMAX_DELAY);
-    int32_t motor_angle = motor_encoder->getRotation(true);
+    int32_t motor_angle = motor_encoder->getRotation(false);
     xSemaphoreGive(foc_spi_mutex);
 
     int32_t delta_angle = motor_angle - prev_angle;
+    int32_t delta_delta_angle = delta_angle - prev_delta_angle;
+    prev_delta_angle = delta_angle;
     prev_angle = motor_angle;
 
-    delta_angle = float(4.0 * delta_angle_factor) * delta_angle;
+    delta_angle = 1.0 * (delta_angle + 0.5 * delta_delta_angle);
 
     // Filter velocity compensation
-    delta_angle = 0.95 + delta_angle + 0.05 * prev_delta_angle;
+    delta_angle = 0.25 * delta_angle + 0.75 * prev_delta_angle;
     prev_delta_angle = delta_angle;
 
 
     // anticipate phase shift based on previous shift
-    int32_t empiric_phase_shift = delta_angle;
+    int32_t empiric_phase_shift = 2* delta_angle;
 
     empiric_phase_shift = empiric_phase_shift;
 
@@ -174,14 +176,14 @@ void FOCController::foc_control() {
     // calculate desired phase currents
 
     int add_phase = 0;
-    /*
+    
     if (target_torque > 0) {
-        add_phase = 1024;
+        add_phase = 512;
     }
     else {
-        add_phase = -1024;
+        add_phase = -512;
     }
-    */
+    
 
 
     int16_t i_a_simp = double(-foc_output_const * target_torque * sine_lookup(electric_angle_int + add_phase));

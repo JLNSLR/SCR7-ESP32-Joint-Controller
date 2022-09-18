@@ -97,7 +97,6 @@ TorqueSensor drvSys_torque_sensor(DRVSYS_TORQUE_SENSOR_TYPE);
 
 // Neural Network to learn inverse dynamics
 NeuralController* neural_controller;
-unsigned int drvSys_max_learning_iterations_per_step = DRVSYS_MAX_LEARNING_ITERATION_PER_STEP;
 float drvSys_neural_control_pred_torque = 0.0;
 bool drvSys_neural_control_auto_activation = DRVSYS_NN_CONTROL_AUTO_ACTIVE;
 
@@ -955,7 +954,7 @@ drvSys_cascade_gains _drvSys_predict_pid_gains() {
     return gains;
 };
 
-float drvSys_pid_tuner_error(bool average) {
+float drvSys_pid_nn_error(bool average) {
 
     if (average) {
         return neural_controller->average_pid_control_error;
@@ -1020,8 +1019,6 @@ void _drvSys_learn_neural_control_task(void* parameters) {
                 }
 
             }
-            drvSys_controller_state.neural_control_active = true;
-
 
             //drvSys_controller_state.neural_control_active = true;
             // Collecting Samples for Training
@@ -1038,19 +1035,11 @@ void _drvSys_learn_neural_control_task(void* parameters) {
             if (counter % learn_iterations_pid_tuner == 0) {
                 neural_controller->learning_step_pid_tuner();
                 neural_controller->learning_step_error_fb_network();
+                neural_controller->learning_step_emulator();
+                learning_counter++;
                 taskYIELD();
             }
 
-            if (counter % learn_iterations == 0) {
-                for (int i = 0; i < 20; i++) {
-                    neural_controller->learning_step_emulator();
-
-
-                    taskYIELD();
-                }
-                learning_counter++;
-
-            }
         }
 
         counter++;
@@ -1058,10 +1047,6 @@ void _drvSys_learn_neural_control_task(void* parameters) {
     }
 
 
-}
-
-void drvSys_inv_dyn_nn_set_max_learning_iterations_per_step(unsigned int n_iterations) {
-    drvSys_max_learning_iterations_per_step = n_iterations;
 }
 
 
@@ -1092,60 +1077,6 @@ void drvSys_neural_control_activate(bool active) {
     drvSys_controller_state.neural_control_active = active;
 }
 
-void drvSys_adapt_nn_parameter(int nn_type, int parameter_type, float value) {
-    if (nn_type == 0) {
-        if (parameter_type == 0) { // learning rate
-            neural_controller->emulator_nn->learning_rate = value;
-            return;
-        }
-        else if (parameter_type == 1) { // max gradient
-            neural_controller->emulator_nn->max_gradient_abs = value;
-        }
-        else if (parameter_type == 2) { // min learning rate
-            neural_controller->emulator_nn->minimal_learning_rate = value;
-        }
-        else if (parameter_type == 3) { // error learning rate factor
-            neural_controller->emulator_nn->lr_error_factor = value;
-        }
-        else if (parameter_type == 4) { // maximum learning rate
-            neural_controller->emulator_nn->maximal_learning_rate = value;
-        }
-        else if (parameter_type == 5) {
-            if (value == 0.0) {
-                neural_controller->emulator_nn->lr_schedule = no_schedule;
-            }
-            else if (value == 1.0) {
-                neural_controller->emulator_nn->lr_schedule = error_adaptive;
-            }
-        }
-    }
-    if (nn_type == 1) {
-        if (parameter_type == 0) { // learning rate
-            neural_controller->error_feedback_nn->learning_rate = value;
-            return;
-        }
-        else if (parameter_type == 1) { // max gradient
-            neural_controller->error_feedback_nn->max_gradient_abs = value;
-        }
-        else if (parameter_type == 2) { // min learning rate
-            neural_controller->error_feedback_nn->minimal_learning_rate = value;
-        }
-        else if (parameter_type == 3) { // error learning rate factor
-            neural_controller->error_feedback_nn->lr_error_factor = value;
-        }
-        else if (parameter_type == 4) { // maximum learning rate
-            neural_controller->error_feedback_nn->maximal_learning_rate = value;
-        }
-        else if (parameter_type == 5) {
-            if (value == 0.0) {
-                neural_controller->error_feedback_nn->lr_schedule = no_schedule;
-            }
-            else if (value == 1.0) {
-                neural_controller->error_feedback_nn->lr_schedule = error_adaptive;
-            }
-        }
-    }
-}
 /**
  * @brief
  *
@@ -1735,9 +1666,6 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
 
     static const int pos_divider = DRVSYS_CONTROL_POS_PERIOD_US / DRVSYS_CONTROL_VEL_PERIOD_US;
 
-    static const int gain_update_divider = 10000 / DRVSYS_CONTROL_VEL_PERIOD_US; // every 200 Hz
-
-
     const float frequ_limit = DRVSYS_NN_CONTROL_BANDWIDTH;
     const float torque_ff_alpha = 1 - exp(-DRVSYS_CONTROL_VEL_PERIOD_US * 1e-6 / (1.0 / frequ_limit));
     static float prev_torque_ff = 0;
@@ -1803,32 +1731,17 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
 
                 drvSys_pid_torque = drvSys_velocity_controller.output;
 
-                float torque_ff_static = drvSys_vel_target * drvSys_vel_ff_gain + drvSys_acc_target * drvSys_acc_ff_gain;
-
-
                 if (drvSys_controller_state.neural_control_active) {
-                    drvSys_neural_control_pred_torque = _drvSys_neural_control_predict_torque();
-                    torque_ff = torque_ff_alpha * drvSys_neural_control_pred_torque + (1.0 - torque_ff_alpha) * prev_torque_ff;
-                    drvSys_neural_control_pred_torque = torque_ff;
-                    prev_torque_ff = torque_ff;
+                    if (counter % pos_divider == 0) {
+                        drvSys_neural_control_pred_torque = _drvSys_neural_control_predict_torque();
+                        torque_ff = torque_ff_alpha * drvSys_neural_control_pred_torque + (1.0 - torque_ff_alpha) * prev_torque_ff;
+                        drvSys_neural_control_pred_torque = torque_ff;
+                        prev_torque_ff = torque_ff;
+                    }
 
                 }
 
-
-                /*
-                drvSys_neural_control_pred_torque = torque_ff;
-                torque_ff = torque_ff_alpha * drvSys_neural_control_pred_torque + (1.0 - torque_ff_alpha) * prev_torque_ff;
-                drvSys_neural_control_pred_torque = torque_ff;
-                prev_torque_ff = torque_ff;
-                */
-
-                //Serial.println(drvSys_pid_torque);
-
-                //float motor_torque_target = drvSys_pid_torque + drvSys_vel_target * drvSys_vel_ff_gain + drvSys_acc_target * drvSys_acc_ff_gain;
-
-
-                float motor_torque_target = drvSys_pid_torque + torque_ff + torque_ff_static;
-
+                float motor_torque_target = drvSys_pid_torque + torque_ff + drvSys_vel_target * drvSys_vel_ff_gain + drvSys_acc_target * drvSys_acc_ff_gain;;
 
                 _drvSys_set_target_torque(motor_torque_target);
                 counter++;
@@ -1857,23 +1770,6 @@ void _drvSys_torque_controller_task(void* parameters) {
         torque_controller_processing_thread_notification = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         if (torque_controller_processing_thread_notification) {
-
-            /*
-            xSemaphoreTake(drvSys_mutex_motor_commanded_torque, portMAX_DELAY);
-            drvSys_motor_torque_command_prev = drvSys_motor_torque_commanded;
-            xSemaphoreGive(drvSys_mutex_motor_commanded_torque);
-            */
-
-            /*
-            if (drvSys_controller_state.neural_control_active) {
-                if (counter % 1 == 0) {
-                    drvSys_neural_control_pred_torque = _drvSys_neural_control_predict_torque();
-                    torque_ff = torque_ff_alpha * drvSys_neural_control_pred_torque + (1.0 - torque_ff_alpha) * prev_torque_ff;
-                    drvSys_neural_control_pred_torque = torque_ff;
-                    prev_torque_ff = torque_ff;
-                }
-            }
-            */
 
             motor_torque_command = _drvSys_torque_target + drvSys_torque_ff;// + torque_ff;
 

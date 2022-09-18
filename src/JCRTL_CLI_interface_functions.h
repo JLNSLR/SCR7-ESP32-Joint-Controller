@@ -19,6 +19,8 @@ bool jctrl_cli_process_drive_sys_command(char(*cli_arg)[N_MAX_ARGS]);
 
 bool jctrl_cli_process_output_command(char(*cli_arg)[N_MAX_ARGS]);
 
+bool jctrl_cli_process_controller_state_command(char(*cli_arg)[N_MAX_ARGS]);
+
 bool jctrl_cli_process_adapt_kalman(char(*cli_arg)[N_MAX_ARGS]);
 
 bool jctrl_cli_process_nn_commands(char(*cli_arg)[N_MAX_ARGS]);

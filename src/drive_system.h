@@ -198,14 +198,6 @@ void _drvSys_learn_neural_control_task(void* parameters);
 void drvSys_neural_control_activate(bool active);
 void drvSys_neural_control_save_nets(bool reset = false);
 /**
- * @brief Adapts parameters of NN online
- *
- * @param nn_type 0 - Emulator, 1 - Controller
- * @param parameter_type 0 - lr, 1 - min_lr,  2 - lr_error_factor, 3 - max_lr, 4 -
- * @param value
- */
-void drvSys_adapt_nn_parameter(int nn_type, int parameter_type, float value);
-/**
  * @brief
  *
  * @param nn_type 0 - Emulator, 1-Controller
@@ -217,11 +209,12 @@ float drvSys_get_neural_control_error(int nn_type, int error_type);
 float drvSys_neural_control_error();
 float _drvSys_neural_control_predict_torque();
 float drvSys_neural_control_read_predicted_torque();
+
 drvSys_driveState drvSys_get_emulator_pred();
 
 drvSys_cascade_gains _drvSys_predict_pid_gains();
 
-float drvSys_pid_tuner_error(bool average = false);
+float drvSys_pid_nn_error(bool average = false);
 
 /**
  * @brief if torqueboost is active, the maximum phase current is used in foc control instead of the

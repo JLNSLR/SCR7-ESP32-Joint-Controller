@@ -68,11 +68,7 @@
 
 
 //Learning System 
-#define DRVSYS_MAX_LEARNING_ITERATION_PER_STEP 10
-#define DRVSYS_INV_DYN_ACTIVATION_ERROR_THRESHOLD 0.05
-
-#define DRVSYS_INV_DYN_LEARNING_ACTIVE 0
-#define DRVSYS_PID_GAIN_LEARNING_ACTIVE 0
+#define DRVSYS_PIDNN_LEARNING_REGULARIZATION 10 // (the lower this value, the more conservative (smaller Gains) the adaptive Tuning will be)
 
 
 // Task Stack Sizes
@@ -115,7 +111,7 @@
 #define TEMP_SENSOR_AVAILABLE 1
 #define FAN_AVAILABLE 1
 #define FAN_12V 0
-#define FAN_24V 0
+#define FAN_24V 1
 #define N_LEDS 1
 
 
