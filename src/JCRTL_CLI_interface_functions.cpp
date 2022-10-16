@@ -146,7 +146,7 @@ bool jctrl_cli_process_pid_command(char(*cli_arg)[N_MAX_ARGS]) {
                 else {
                     _jctrl_cli_feedback_output("Velocity Controller: ");
                 }
-                _jctrl_cli_feedback_output("Set PID gains to: " + String(p_val) + ", " + String(i_val) + ", " + String(d_val) + ".");
+                _jctrl_cli_feedback_output("Set PID gains to: " + String(p_val) + ", " + String(i_val) + ".");
             }
 
             drvSys_set_PID_gains(pos, p_val, i_val, d_val, save);
@@ -197,11 +197,6 @@ bool jctrl_cli_process_drive_sys_command(char(*cli_arg)[N_MAX_ARGS]) {
                 return processed;
             }
             if (mode == 2) {
-                drvSys_start_motion_control(admittance_control);
-                _jctrl_cli_feedback_output("Started motion control in admittance control mode.");
-                return processed;
-            }
-            if (mode == 3) {
                 drvSys_start_motion_control(stepper_mode);
                 _jctrl_cli_feedback_output("Started motion control in stepper mode.");
                 return processed;
@@ -215,6 +210,9 @@ bool jctrl_cli_process_drive_sys_command(char(*cli_arg)[N_MAX_ARGS]) {
         _jctrl_cli_feedback_output("Stopped motion controllers.");
         return processed;
     }
+
+
+    
 
     return processed;
 
@@ -318,9 +316,6 @@ bool jctrl_cli_process_controller_state_command(char(*cli_arg)[N_MAX_ARGS]) {
         if (state.control_mode == closed_loop_foc) {
             control_mode = "Closed Loop FOC";
         }
-        if (state.control_mode == admittance_control) {
-            control_mode = "Admittance Control";
-        }
         if (state.control_mode == stepper_mode) {
             control_mode = "Stepper";
         }
@@ -341,6 +336,13 @@ bool jctrl_cli_process_controller_state_command(char(*cli_arg)[N_MAX_ARGS]) {
         if (state.state_flag == closed_loop_control_inactive) {
             state_flag = "Closed Loop Control Inactive";
         }
+
+        Serial.print("Position Control: ");
+        Serial.println(state.position_control);
+
+        Serial.print("Velocity Control: ");
+        Serial.print(state.velocity_control);
+
         Serial.println(state_flag);
 
         Serial.print("Calibrated: ");
@@ -363,8 +365,11 @@ bool jctrl_cli_process_controller_state_command(char(*cli_arg)[N_MAX_ARGS]) {
         Serial.print("Fan Level: ");
         Serial.println(state.fan_level);
 
-        Serial.print("Neural Control Error Feedback Control active: ");
-        Serial.println(state.neural_control_active);
+        Serial.print("Position Control: ");
+        Serial.println(state.position_control);
+
+        Serial.print("Velocity Control: ");
+        Serial.print(state.velocity_control);
 
     }
     return processed;
@@ -440,14 +445,12 @@ bool jctrl_cli_process_trajectory_command(char(*cli_arg)[N_MAX_ARGS]) {
         float vel_target = atof(value_1);
         float acc_target = atof(value_2);
         float torque_ff = atof(value_3);
-        float torque_ref = atof(value_4);
 
         drvSys_driveTargets target;
         target.acc_target = acc_target;
         target.vel_target = vel_target;
         target.pos_target = position_target;
         target.motor_torque_ff = torque_ff;
-        target.ref_torque = torque_ref;
         handle_motion_command(target);
 
     }
@@ -748,8 +751,7 @@ void _jctrl_cli_output_periodic() {
         drvSys_driveTargets targets = drvSys_get_targets();
         drvSys_FullDriveState state = drvSys_get_full_drive_state();
 
-        drvSys_PID_Gains gains_pos = drvSys_get_PID_gains(true);
-        drvSys_PID_Gains gains_vel = drvSys_get_PID_gains(false);
+        drvSys_cascade_gains gains = drvSys_get_controller_gains();
 
         float current_error = drvSys_pid_nn_error(false);
         float average_error = drvSys_pid_nn_error(true);
@@ -768,19 +770,15 @@ void _jctrl_cli_output_periodic() {
         Serial.print("\t");
         Serial.print(targets.vel_target * RAD2DEG);
         Serial.print("\t");
-        Serial.print(gains_pos.K_p, 8);
+        Serial.print(gains.pos_Kp, 8);
         Serial.print("\t");
-        Serial.print(gains_pos.K_i, 8);
+        Serial.print(gains.vel_Kp, 8);
         Serial.print("\t");
-        Serial.print(gains_pos.K_d, 8);
+        Serial.print(gains.vel_Ki, 8);
         Serial.print("\t");
-        Serial.print(gains_vel.K_p, 8);
+        Serial.print(current_error, 4);
         Serial.print("\t");
-        Serial.print(gains_vel.K_i, 8);
-        Serial.print("\t");
-        Serial.print(current_error);
-        Serial.print("\t");
-        Serial.println(average_error);
+        Serial.println(average_error, 4);
 
     }
 }

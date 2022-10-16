@@ -113,6 +113,10 @@ public:
     NeuralNetwork* error_feedback_nn;
     NeuralNetwork* controller_nn;
 
+    bool pid_ff_active = true;
+    bool pid_position_control_active = true;
+    bool pid_velocity_control_active = false;
+
     float emulator_error = 0;
     float average_emulator_error = 1;
     float average_control_error = 1;
@@ -121,6 +125,13 @@ public:
     bool pid_net_pretrained = false;
     bool emu_net_pretrained = false;
     float control_effort_penalty = 1.0;
+
+    float pid_nn_regularization = DRVSYS_PIDNN_LEARNING_REGULARIZATION;
+
+    float pid_nn_max_learning_rate = 8e-3;
+    float pid_nn_min_learning_rate = 0.5e-6;
+
+    float pid_nn_learning_rate_scale = 10e-3;
 
 
     float pid_control_error = 0;
@@ -155,14 +166,14 @@ private:
     char controller_nn_name[7] = "c_nn";
 
 
-    static const int error_fb_depth = 4;
-    int error_fb_width[error_fb_depth] = { 8,12,8,1 };
-    nn_activation_f error_fb_act[error_fb_depth - 1] = { leakyReLu,leakyReLu,Linear };
+    static const int error_fb_depth = 3;
+    int error_fb_width[error_fb_depth] = { 8,16,1 };
+    nn_activation_f error_fb_act[error_fb_depth - 1] = { leakyReLu,Linear };
 
 
-    static const int controller_nn_depth = 4;
-    int controller_nn_width[controller_nn_depth] = { 10,12,10,5 };
-    nn_activation_f controller_nn_act[controller_nn_depth - 1] = { leakyReLu, leakyReLu,Linear };
+    static const int controller_nn_depth = 3;
+    int controller_nn_width[controller_nn_depth] = { 10,12,5 };
+    nn_activation_f controller_nn_act[controller_nn_depth - 1] = { leakyReLu,Linear };
 
 
     pid_tune_sample current_pid_sample;
@@ -186,7 +197,6 @@ private:
 
     float abs_grad(float x);
 
-    float pid_nn_regularization = DRVSYS_PIDNN_LEARNING_REGULARIZATION;
 
 
 };
