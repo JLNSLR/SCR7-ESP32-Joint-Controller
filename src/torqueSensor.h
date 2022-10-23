@@ -65,7 +65,7 @@ private:
     float read_raw_dms();
     float read_raw_capacitive_sensors();
 
-    bool read_calibration_data();
+    void read_calibration_data();
 
     NAU7802 dms_sensor;
     FDC2214* cap_sensor;

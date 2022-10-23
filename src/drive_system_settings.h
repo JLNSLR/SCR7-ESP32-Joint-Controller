@@ -13,7 +13,7 @@
 /* --- Timing Constants --- */
 #define DRVSYS_FOC_PERIOD_US 200 //us -> 5kHz
 //Encoder Processing
-#define DRVSYS_PROCESS_ENCODERS_PERIOD_US 500 //us -> 3kHz
+#define DRVSYS_PROCESS_ENCODERS_PERIOD_US 500 //us -> 2kHz
 #define DRVSYS_PROCESS_ENCODERS_FREQU 2000 //Hz
 // Torque Target Control 
 #define DRVSYS_CONTROL_TORQUE_PERIOD_US 400 // us 
@@ -68,7 +68,7 @@
 
 
 //Learning System 
-#define DRVSYS_PIDNN_LEARNING_REGULARIZATION 1e-2 // (the higher this value, the more conservative (smaller Gains) the adaptive Tuning will be)
+#define DRVSYS_PIDNN_LEARNING_REGULARIZATION 1e-3 // (the higher this value, the more conservative (smaller Gains) the adaptive Tuning will be)
 
 
 // Task Stack Sizes
@@ -176,8 +176,8 @@
 #define DRVSYS_MOTOR_ENC_ALIGN_DIR 1.0
 
 //Kalman Filter Noise Assumptions
-#define DRVSYS_KIN_KALMAN_MOTOR_ACCELERATION_STD 100*DEG2RAD
-#define DRVSYS_KIN_KALMAN_JOINT_ACCELERATION_STD 10*DEG2RAD
+#define DRVSYS_KIN_KALMAN_MOTOR_ACCELERATION_STD 1000.0*DEG2RAD
+#define DRVSYS_KIN_KALMAN_JOINT_ACCELERATION_STD 100.0*DEG2RAD
 
 
 // Notch Filter Settings
@@ -195,8 +195,8 @@
 #define DRVSYS_VEL_PID_FILTER_DERIVATIVE 1
 #define DRVSYS_VEL_PID_FILTER_DERIVATIVE_ALPHA 0.001 // corresponds to ~ 1 Hz aka 2ms Time Constant alpha = (1-exp(-T/tau))
 #define DRVSYS_VEL_PID_DERIVATIVE_ON_MEASUREMENT 0
-#define DRVSYS_VEL_PID_DEADBAND 0
-#define DRVSYS_VEL_PID_INPUT_FILTER_ALPHA 0.001 // 200Hz/90 ~ 1Hz
+#define DRVSYS_VEL_PID_DEADBAND 0.0*DEG2RAD
+#define DRVSYS_VEL_PID_INPUT_FILTER_ALPHA 0.005 // 200Hz/90 ~ 1Hz
 
 // PID Gains
 #define PID_POS_GAIN_P 1.00

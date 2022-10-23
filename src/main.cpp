@@ -63,7 +63,7 @@ void setup()
 
   // Start Motion Control Interface
   Serial.println("JCTRL_INFO: Starting Motion Control Interface.");
-  drvSys_start_motion_control(direct_torque);
+  drvSys_start_motion_control(closed_loop_foc);
 
   // Initialize Command-Line-Interface (CLI)
   cli_init();
@@ -73,8 +73,8 @@ void setup()
 
   // Initialize CAN Interface;
   
-  can_init();
-  can_start_interface();
+  //can_init();
+  //can_start_interface();
   
 
 

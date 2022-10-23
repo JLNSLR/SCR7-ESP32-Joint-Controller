@@ -776,6 +776,10 @@ void _jctrl_cli_output_periodic() {
         Serial.print("\t");
         Serial.print(gains.vel_Ki, 8);
         Serial.print("\t");
+        Serial.print(gains.vel_ff_gain, 8);
+        Serial.print("\t");
+        Serial.print(gains.acc_ff_gain, 8);
+        Serial.print("\t");
         Serial.print(current_error, 4);
         Serial.print("\t");
         Serial.println(average_error, 4);

@@ -1306,7 +1306,7 @@ void _drvSys_setup_dual_controller() {
     drvSys_velocity_controller.setMode(PID_MODE_INACTIVE);
     drvSys_velocity_controller.SetControllerDirection(PID_DIR_DIRECT);
     drvSys_velocity_controller.setDifferentialFilter(1, 0.03);
-    drvSys_velocity_controller.setErrorDeadBand(0);
+    drvSys_velocity_controller.setErrorDeadBand(DRVSYS_VEL_PID_DEADBAND);
 
     drvSys_velocity_controller.setInputFilter(true, DRVSYS_VEL_PID_INPUT_FILTER_ALPHA);
 
@@ -1661,6 +1661,7 @@ void _drvSys_process_encoders_task(void* parameters) {
             //handle joint torque 
             if (counter % divider == 0) {
                 drvSys_joint_torque_prev = drvSys_joint_torque;
+                drvSys_motor_torque_command_prev = drvSys_motor_torque_commanded;
             }
 
             counter++;
@@ -1718,7 +1719,7 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
 
             if (drvSys_controller_state.control_mode == closed_loop_foc) {
 
-                if (counter % pos_divider == 0) { // Handle position controller with 800 Hz
+                if (counter % pos_divider == 0) { // Handle position controller with 500 Hz
 
 
                     drvSys_cascade_gains updated_gains = neural_controller->predict_gains(drvSys_get_full_drive_state(), drvSys_get_targets());
@@ -1838,9 +1839,6 @@ void _drvSys_torque_controller_task(void* parameters) {
             xSemaphoreTake(drvSys_mutex_motor_commanded_torque, portMAX_DELAY);
             drvSys_motor_torque_commanded = _drvSys_check_joint_limit(motor_torque_command);
             drvSys_foc_controller.set_target_torque(drvSys_motor_torque_commanded);
-            if (counter % sample_divider == 0) {
-                drvSys_motor_torque_command_prev = drvSys_motor_torque_commanded;
-            }
             xSemaphoreGive(drvSys_mutex_motor_commanded_torque);
             counter++;
 

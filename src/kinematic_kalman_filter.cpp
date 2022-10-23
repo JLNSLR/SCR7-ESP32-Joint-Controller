@@ -89,7 +89,7 @@ void KinematicKalmanFilter::init(float delta_t) {
     identity_matrix(1, 1) = 1;
     identity_matrix(2, 2) = 1;
 
-    sensor_noise = 0.025 * DEG2RAD; // DEG
+    sensor_noise = 0.1 * DEG2RAD; // DEG
 
 
     /*

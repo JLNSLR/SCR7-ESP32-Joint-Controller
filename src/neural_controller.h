@@ -113,9 +113,11 @@ public:
     NeuralNetwork* error_feedback_nn;
     NeuralNetwork* controller_nn;
 
+    NeuralNetwork* inverse_dynamics_nn;
+
     bool pid_ff_active = true;
     bool pid_position_control_active = true;
-    bool pid_velocity_control_active = false;
+    bool pid_velocity_control_active = true;
 
     float emulator_error = 0;
     float average_emulator_error = 1;
@@ -174,6 +176,11 @@ private:
     static const int controller_nn_depth = 3;
     int controller_nn_width[controller_nn_depth] = { 10,12,5 };
     nn_activation_f controller_nn_act[controller_nn_depth - 1] = { leakyReLu,Linear };
+
+
+    static const int inv_nn_depth = 3;
+    int inv_nn_width[inv_nn_depth] = { 10,12,1 };
+    nn_activation_f inv_nn_act[inv_nn_depth - 1] = { leakyReLu,Linear };
 
 
     pid_tune_sample current_pid_sample;
