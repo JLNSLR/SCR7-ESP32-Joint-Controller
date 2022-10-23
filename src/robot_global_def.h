@@ -37,6 +37,7 @@
 
 #define TORQUE_SENSOR_MAX_VAL23_BIT 8388608
 
+#define UNSIGNED_INT_16BIT_VAL 65536
 #define SIGNED_INT_16BIT_MAXVAL 32768
 
 #define SIGNED_INT_14BIT_MAXVAL 8192
@@ -54,7 +55,7 @@
 
 #define MAX_MOTOR_TEMP 150.0
 
-#define MAX_PID_GAIN_VAL 1000.0
+#define MAX_GAIN_VAL 1000.0
 
 #define N_BITS_POS_DATA 14
 #define N_BITS_VEL_DATA 14
@@ -99,15 +100,17 @@ const float pos_to_14bit_data = 1.0 / pos_data_14bit_to_val;
 const float vel_to_14bit_data = 1.0 / vel_data_14bit_to_val;
 const float acc_to_13bit_data = 1.0 / acc_data_13bit_to_val;
 
-const float ref_torque_data_14bit_to_val = float(JOINT_TORQUE_REF_MAX_Nm) / float(SIGNED_INT_14BIT_MAXVAL);
-const float ref_torque_to_14bit_data = 1.0 / ref_torque_data_14bit_to_val;
+//const float ref_torque_data_14bit_to_val = float(JOINT_TORQUE_REF_MAX_Nm) / float(SIGNED_INT_14BIT_MAXVAL);
+//const float ref_torque_to_14bit_data = 1.0 / ref_torque_data_14bit_to_val;
 
 const float motor_temp_12bit_to_val = MAX_MOTOR_TEMP / UNSIGNED_INT_12BIT_MAXVAL;
 const float motor_temp_val_to_12bit = 1.0 / motor_temp_12bit_to_val;
 
-const float pid_gain_data_20bit_to_val = MAX_PID_GAIN_VAL * (1.0 / 524288);
-const float pid_gain_val_to_20bit = 1.0 / pid_gain_data_20bit_to_val;
+//const float pid_gain_data_20bit_to_val = MAX_GAIN_VAL * (1.0 / 524288);
+//const float pid_gain_val_to_20bit = 1.0 / pid_gain_data_20bit_to_val;
 
+const float gain_data_16bit_to_val = MAX_GAIN_VAL * (1.0 / UNSIGNED_INT_16BIT_VAL);
+const float gain_val_to_16bit = 1.0 / gain_data_16bit_to_val;
 
 
 

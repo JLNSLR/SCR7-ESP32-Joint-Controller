@@ -15,16 +15,11 @@
 #include <Wire.h>
 #include <torqueSensor.h>
 
-//#include <joint_can_handler.h>
+#include <joint_can_handler.h>
 
 
 
 // --- Global Variables --- //
-
-float target = 50;
-float dir = 1.0;
-float acc = 1.0;
-float vel = 1.0;
 
 int counter = 0;
 
@@ -74,13 +69,13 @@ void setup()
   cli_init();
   start_motion_interface();
 
-  //set_standard_lights();
+  set_standard_lights();
 
   // Initialize CAN Interface;
-  /*
+  
   can_init();
   can_start_interface();
-  */
+  
 
 
   //set LED blue

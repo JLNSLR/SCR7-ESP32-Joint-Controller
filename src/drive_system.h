@@ -57,6 +57,11 @@ void _drvSys_stop_stepper_controller();
 
 void drvSys_stop_controllers();
 
+void drvSys_set_position_control(bool active);
+
+void drvSys_set_ff_control(bool active);
+
+void drvSys_set_velocity_control(bool active);
 
 /* Interface Functions */
 
@@ -68,6 +73,8 @@ const drvSys_Constants drvSys_get_constants();
 const drvSys_driveTargets drvSys_get_targets();
 drvSys_FullDriveStateTimeSample drvSys_get_full_drive_state_time_samples();
 
+TorqueSensor& drvSys_get_torqueSensor();
+
 /**
  * @brief sets the target values for the joint controller including
  * position (rad), velocity (rad/s), acceleration (rad/s^2), motor torque (Nm), joint torque (Nm)
@@ -75,6 +82,8 @@ drvSys_FullDriveStateTimeSample drvSys_get_full_drive_state_time_samples();
  * @param targets
  */
 void drvSys_set_target(drvSys_driveTargets targets);
+
+void drvSys_set_control_targets(drvSys_driveControlTargets targets);
 
 
 /**
@@ -145,9 +154,11 @@ void drvSys_loadOffsets();
  * @param save - if true saves new gains on flash
  */
 
+
+drvSys_cascade_gains drvSys_get_controller_gains();
 drvSys_PID_Gains drvSys_get_PID_gains(bool pos_controller = true);
 void drvSys_set_PID_gains(bool pos, float Kp, float Ki, float Kd, bool save = true);
-void drvSys_set_ff_gains(float gain);
+void drvSys_set_ff_gains(float vel_ff_gain, float acc_ff_gain);
 void drvSys_save_PID_gains();
 
 /**
@@ -161,13 +172,8 @@ void drvSys_adv_PID_settings(bool pos, int type, float value);
 
 void drvSys_limit_torque(float torque_limit);
 
-void drvSys_set_admittance_params(float virtual_spring, float virtual_damping, float virtual_inertia, bool save = true);
-void drvSys_save_admittance_params();
-
 
 bool _drvSys_read_PID_gains_from_flash();
-bool _drvSys_read_admittanceGains_from_flash();
-
 
 void _drvSys_save_angle_offset(float angle_offset);
 
@@ -195,6 +201,12 @@ void _drvSys_align_axis();
 
 void _drvSys_neural_controller_setup();
 void _drvSys_learn_neural_control_task(void* parameters);
+/**
+ * @brief sets neural PID settings
+ * @param type - int: 0 - learning rate, 1 - gain_regularization
+ * @param parameter_val - float
+ */
+void drvSys_neural_PID_settings(int type, float parameter_val);
 void drvSys_neural_control_activate(bool active);
 void drvSys_neural_control_save_nets(bool reset = false);
 /**
@@ -257,9 +269,6 @@ void _drvSys_PID_dual_controller_task(void* parameters);
 
 void _drvSys_torque_controller_task(void* parameters);
 
-void _drvSys_admittance_controller_task(void* parameters);
-
-
 void _drvSys_monitor_system_task(void* parameters);
 
 void _drvSys_closed_loop_stepper_task(void* parameters);
@@ -270,12 +279,6 @@ void _drvSys_closed_loop_stepper_task(void* parameters);
 void _drvSys_setup_dual_controller();
 
 void _drvSys_setup_direct_controller();
-
-void _drvSys_setup_admittance_controller();
-
-//void _drvSys_setup_impedance_controller();
-
-//void _drvSys_setup_hybrid_controoller();
 
 void drvSys_calibrate_FOC();
 

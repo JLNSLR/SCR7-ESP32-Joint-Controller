@@ -41,6 +41,8 @@ private:
 
     bool setup_done = false;
 
+    float current_vel_deg = 0;
+
 
     int prescaler = 80; // Timer then hits every 100ns
 

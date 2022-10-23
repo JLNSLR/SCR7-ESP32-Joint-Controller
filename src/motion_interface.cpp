@@ -46,6 +46,14 @@ void start_motion_interface() {
 
 }
 
+void handle_motion_control_command(drvSys_driveControlTargets target_data) {
+
+    motion_mode = trajectory;
+    drvSys_set_control_targets(target_data);
+    command_given = true;
+
+}
+
 void handle_motion_command(float target_pos) {
     if (motion_planner.executing_traj_flag) {
 
@@ -62,6 +70,7 @@ void handle_motion_command(float target_pos) {
     }
     command_given = true;
 }
+
 
 void handle_motion_command(float target_pos, float travel_vel, float travel_acc) {
     motion_mode = position;
@@ -120,7 +129,6 @@ void _motion_sequencer_task(void* parameters) {
             target.vel_target = target_point.velocity;
             target.pos_target = target_point.position;
             target.motor_torque_ff = 0;
-            target.ref_torque = 0;
 
             drvSys_set_target(target);
         }
@@ -144,7 +152,7 @@ void _motion_sequencer_task(void* parameters) {
                         if (float(rand()) / float(RAND_MAX) > 0.5) {
                             dir = -dir;
                         }
-                        float vel = (float(rand()) / float(RAND_MAX)) * 30.0 + 3.0;
+                        float vel = (float(rand()) / float(RAND_MAX)) * 140.0 + 3.0;
                         acc = (float(rand()) / float(RAND_MAX)) * 100.0 + 5.0;
 
                         handle_motion_command(target * DEG2RAD * dir, vel * DEG2RAD, acc * DEG2RAD);
@@ -271,7 +279,6 @@ void _output_test_sinusoid_signal() {
     target.vel_target = vel;
     target.pos_target = pos;
     target.motor_torque_ff = 0;
-    target.ref_torque = 0;
 
     drvSys_set_target(target);
 

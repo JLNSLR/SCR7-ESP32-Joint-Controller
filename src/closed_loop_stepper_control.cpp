@@ -101,13 +101,28 @@ void ClosedLoopStepperController::set_target_vel(float vel) {
 
     float vel_deg = vel * RAD2DEG;
 
+    // Rate Limiter
+    const float rate_limit_vel_change_deg = 1000;
+
+    if (vel_deg - current_vel_deg > rate_limit_vel_change_deg) {
+        current_vel_deg = current_vel_deg + rate_limit_vel_change_deg;
+    }
+    else if (vel_deg - current_vel_deg < -rate_limit_vel_change_deg) {
+        current_vel_deg = current_vel_deg - rate_limit_vel_change_deg;
+    }
+    else {
+        current_vel_deg = vel_deg;
+    }
+
+
+
     if (vel == 0.0) {
         output_pulse = false;
     }
     else {
         output_pulse = true;
 
-        float t_period_10us = (const_factor / vel_deg) * (1.0 / 10e-6);
+        float t_period_10us = (const_factor / current_vel_deg) * (1.0 / 10e-6);
 
         int ticks = abs(int(t_period_10us));
 

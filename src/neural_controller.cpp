@@ -38,6 +38,22 @@ void NeuralController::init() {
     }
 
 
+    inverse_dynamics_nn = new NeuralNetwork(inv_nn_depth, inv_nn_width, inv_nn_act);
+    inverse_dynamics_nn->loss_type = MSE;
+    inverse_dynamics_nn->learning_rate = 1e-4;
+    inverse_dynamics_nn->lr_schedule = no_schedule;
+    inverse_dynamics_nn->update_rule = adam;
+    inverse_dynamics_nn->lr_error_factor = 1e-3;
+    inverse_dynamics_nn->minimal_learning_rate = 1e-5;
+    inverse_dynamics_nn->maximal_learning_rate = 0.5e-2;
+    inverse_dynamics_nn->init_weights_randomly(0.0, -0.0);
+    inverse_dynamics_nn->max_gradient_abs = 1.0;
+    inverse_dynamics_nn->regularization = lasso;
+    inverse_dynamics_nn->reg_penalty_factor = 1e-3;
+
+    mutex_ff_controller = xSemaphoreCreateBinary();
+
+
     // Initializing neural controller
 
     error_feedback_nn = new NeuralNetwork(error_fb_depth, error_fb_width, error_fb_act);
@@ -511,6 +527,10 @@ void NeuralController::learning_step_pid_tuner() {
         return;
     }
 
+    if (!pid_velocity_control_active) {
+        return;
+    }
+
 
     //#define PID_LEARN_DEBUG
 
@@ -562,10 +582,19 @@ void NeuralController::learning_step_pid_tuner() {
     float vel_ff_gain = abs(gains_arr[3]);
     float acc_ff_gain = abs(gains_arr[4] / 10.0);
 
+    if (!pid_ff_active) {
+        vel_ff_gain = 0;
+        acc_ff_gain = 0;
+    }
+
 
     float pos_kp = pos_Kp;
     //float pos_ki = pos_Ki * pos_sample_time_s;
     //float pos_kd = pos_Kd * (1.0 / pos_sample_time_s);
+
+    if (!pid_position_control_active) {
+        pos_kp = 0;
+    }
 
     float vel_kp = vel_Kp;
     float vel_ki = vel_Ki * vel_sample_time_s;
@@ -608,6 +637,8 @@ void NeuralController::learning_step_pid_tuner() {
     float vel_error_in = target_vel_m - current_pid_sample.motor_vel * max_vel;
 
     float pid_torque = vel_error_in * vel_kp + (iTerm_error_vel + vel_error_in) * vel_ki;
+
+
     float motor_torque = pid_torque + vel_ff_gain * vel_target + acc_ff_gain * acc_target;
 
     if (motor_torque > DRVSYS_TORQUE_LIMIT) {
@@ -658,8 +689,8 @@ void NeuralController::learning_step_pid_tuner() {
     drvSys_driveState state_pred_min_eps = emulator_predict_next_state(current_state_min_eps);
 
     // obtain pid control error
-    float pos_error = (state_pred.joint_pos - pos_target);
-    float vel_error = (current_state.motor_vel - target_vel_m) + (state_pred.joint_vel - vel_target);
+    float pos_error = 100 * (current_state.joint_pos - pos_target);
+    float vel_error = 10 * (current_state.motor_vel - target_vel_m) + (state_pred.joint_vel - vel_target);
     float acc_error = (current_state.joint_acc - acc_target);
 #ifdef PID_LEARN_DEBUG
     Serial.println("simulated error");
@@ -755,6 +786,7 @@ void NeuralController::learning_step_pid_tuner() {
 
 
     static float loss_gains[6] = { 0 };
+    /*
     loss_gains[0] = abs_grad(pos_Kp) * (delta_Kp_pos + reg_penalty * (gains_arr[0] * gains_arr[0] * gains_arr[0]));
     //loss_gains[1] = delta_Ki_pos + reg_penalty * (pos_Ki * pos_Ki * pos_Ki);
     //loss_gains[2] = delta_Kd_pos + reg_penalty * (pos_Kd * pos_Kd * pos_Kd);
@@ -762,9 +794,28 @@ void NeuralController::learning_step_pid_tuner() {
     loss_gains[2] = abs_grad(vel_Ki) * (delta_Ki_vel + reg_penalty * 1e-1 * (gains_arr[2] * gains_arr[2] * gains_arr[2]));
     loss_gains[3] = abs_grad(vel_ff_gain) * (delta_vel_ff + reg_penalty * 0.1 * (gains_arr[3] * gains_arr[3] * gains_arr[3]));
     loss_gains[4] = abs_grad(acc_ff_gain) * (delta_acc_ff + reg_penalty * 0.1 * gains_arr[4] * gains_arr[4] * gains_arr[4]);
+    */
+
+
+    loss_gains[0] = abs_grad(pos_Kp) * (delta_Kp_pos + reg_penalty * (gains_arr[0]));
+    //loss_gains[1] = delta_Ki_pos + reg_penalty * (pos_Ki * pos_Ki * pos_Ki);
+    //loss_gains[2] = delta_Kd_pos + reg_penalty * (pos_Kd * pos_Kd * pos_Kd);
+    loss_gains[1] = abs_grad(vel_Kp) * (delta_Kp_vel + reg_penalty * (gains_arr[1]));
+    loss_gains[2] = abs_grad(vel_Ki) * (delta_Ki_vel + reg_penalty * (gains_arr[2]));
+    loss_gains[3] = abs_grad(vel_ff_gain) * (delta_vel_ff + reg_penalty * 0.01 * (gains_arr[3]));
+    loss_gains[4] = abs_grad(acc_ff_gain) * (delta_acc_ff + reg_penalty * 0.01 * gains_arr[4]);
+
+    if (!pid_ff_active) {
+        loss_gains[3] = 0;
+        loss_gains[4] = 0;
+    }
+
+    if (!pid_position_control_active) {
+        loss_gains[0] = 0;
+    }
 #ifdef PID_LEARN_DEBUG
     Serial.println("losses");
-        Serial.println(loss_gains[i], 4);
+    Serial.println(loss_gains[i], 4);
 #endif
 
 
@@ -777,15 +828,15 @@ void NeuralController::learning_step_pid_tuner() {
 
     average_pid_control_error = average_pid_control_error * (1 - 1e-3) + pid_control_error * 1e-3;
 
-    controller_nn->learning_rate = 5e-3 * average_pid_control_error;
+    controller_nn->learning_rate = 10e-2 * pid_control_error;
 
 
-    if (controller_nn->learning_rate > 5e-3) {
-        controller_nn->learning_rate = 5e-3;
+    if (controller_nn->learning_rate > pid_nn_max_learning_rate) {
+        controller_nn->learning_rate = pid_nn_max_learning_rate;
     }
 
-    if (controller_nn->learning_rate < 0.5e-6) {
-        controller_nn->learning_rate = 0.5e-6;
+    if (controller_nn->learning_rate < pid_nn_min_learning_rate) {
+        controller_nn->learning_rate = pid_nn_min_learning_rate;
     }
 
 

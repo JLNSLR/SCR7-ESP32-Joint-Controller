@@ -162,12 +162,12 @@ void FOCController::foc_control() {
     delta_angle = 1.0 * (delta_angle + 0.5 * delta_delta_angle);
 
     // Filter velocity compensation
-    delta_angle = 0.25 * delta_angle + 0.75 * prev_delta_angle;
+    delta_angle = 0.5 * delta_angle + 0.5 * prev_delta_angle;
     prev_delta_angle = delta_angle;
 
 
     // anticipate phase shift based on previous shift
-    int32_t empiric_phase_shift = 2* delta_angle;
+    int32_t empiric_phase_shift = 4* delta_angle;
 
     empiric_phase_shift = empiric_phase_shift;
 

@@ -632,8 +632,12 @@ void _drvSys_setup_FOC_Driver() {
 void drvSys_initialize() {
 
     /* Initial Controller Gains */
-    drvSys_PID_Gains pos_pid_gains = { .K_p = PID_POS_GAIN_P, .K_i = PID_POS_GAIN_I, .K_d = PID_POS_GAIN_D };
-    drvSys_PID_Gains vel_pid_gains = { .K_p = PID_VEL_GAIN_P, .K_i = PID_VEL_GAIN_I, .K_d = PID_VEL_GAIN_D };
+    drvSys_cascade_gains gains = { .pos_Kp = PID_POS_GAIN_P, .pos_Ki = PID_POS_GAIN_I, .pos_Kd = PID_POS_GAIN_D,
+                                    .vel_Kp = PID_VEL_GAIN_P, .vel_Ki = PID_VEL_GAIN_I,
+                                    .vel_ff_gain = DRVSYS_VEL_FF_GAIN, .acc_ff_gain = DRVSYS_ACC_FF_GAIN };
+
+
+    drvSys_PID_Gains stepper_gains = { .K_p = STEPPER_POS_GAIN_P, .K_i = STEPPER_POS_GAIN_I, .K_d = STEPPER_POS_GAIN_D };
 
 
 
@@ -641,11 +645,11 @@ void drvSys_initialize() {
     drvSys_parameter_config.max_current_mA = DRVSYS_PHASE_CURRENT_MAX_mA;
     drvSys_parameter_config.max_vel = DRVSYS_VEL_MAX;
     drvSys_parameter_config.max_torque_Nm = DRVSYS_TORQUE_LIMIT;
-    drvSys_parameter_config.pos_pid_gains = pos_pid_gains;
-    drvSys_parameter_config.vel_pid_gains = vel_pid_gains;
     drvSys_parameter_config.limit_high_rad = DRVSYS_POS_LIMIT_HIGH;
     drvSys_parameter_config.limit_low_rad = DRVSYS_POS_LIMIT_LOW;
     drvSys_parameter_config.endStops_enabled = DRVSYS_LIMITS_ENABLED;
+    drvSys_parameter_config.gains = gains;
+    drvSys_parameter_config.closed_loop_stepper_gains = stepper_gains;
 
 
     /* Setup Hall Pin */
@@ -981,6 +985,10 @@ float drvSys_pid_nn_error(bool average) {
 
 }
 
+drvSys_cascade_gains drvSys_get_controller_gains() {
+
+    return drvSys_parameter_config.gains;
+}
 
 drvSys_PID_Gains drvSys_get_PID_gains(bool pos_controller) {
 
@@ -1281,7 +1289,7 @@ void _drvSys_setup_dual_controller() {
     drvSys_position_controller.setDifferentialFilter(DRVSYS_POS_PID_FILTER_DERIVATIVE, DRVSYS_POS_PID_FILTER_DERIVATIVE_ALPHA);
     drvSys_position_controller.setErrorDeadBand(DRVSYS_POS_PID_DEADBAND);
     drvSys_position_controller.derivative_on_measurement = DRVSYS_POS_PID_DERIVATIVE_ON_MEASUREMENT;
-    drvSys_position_controller.setTuning(drvSys_parameter_config.pos_pid_gains.K_p, drvSys_parameter_config.pos_pid_gains.K_i, drvSys_parameter_config.pos_pid_gains.K_d);
+    drvSys_position_controller.setTuning(drvSys_parameter_config.gains.pos_Kp, drvSys_parameter_config.gains.pos_Ki, drvSys_parameter_config.gains.pos_Kd);
 
     drvSys_position_controller.d_term_vel = false;
     _drvSys_read_PID_gains_from_flash();
@@ -1303,7 +1311,7 @@ void _drvSys_setup_dual_controller() {
     drvSys_velocity_controller.setInputFilter(true, DRVSYS_VEL_PID_INPUT_FILTER_ALPHA);
 
     drvSys_velocity_controller.derivative_on_measurement = DRVSYS_POS_PID_DERIVATIVE_ON_MEASUREMENT;
-    drvSys_velocity_controller.setTuning(drvSys_parameter_config.vel_pid_gains.K_p, drvSys_parameter_config.vel_pid_gains.K_i, drvSys_parameter_config.vel_pid_gains.K_d);
+    drvSys_velocity_controller.setTuning(drvSys_parameter_config.gains.vel_Kp, drvSys_parameter_config.gains.vel_Ki, 0);;
 
 
 
@@ -1351,9 +1359,10 @@ void drvSys_set_kalman_filter_acc_noise(float acc_noise, bool joint) {
     }
 }
 
-void drvSys_set_ff_gains(float gain) {
+void drvSys_set_ff_gains(float vel_ff_gain, float acc_ff_gain) {
 
-    drvSys_vel_ff_gain = gain;
+    drvSys_parameter_config.gains.vel_ff_gain = vel_ff_gain;
+    drvSys_parameter_config.gains.acc_ff_gain = acc_ff_gain;
 
 }
 
@@ -1697,6 +1706,9 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
     static float prev_torque_ff = 0;
     static float torque_ff = 0;
 
+    float vel_ff_gain = drvSys_parameter_config.gains.vel_ff_gain;
+    float acc_ff_gain = drvSys_parameter_config.gains.acc_ff_gain;
+
     while (true) {
 
         position_controller_processing_thread_notification = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
@@ -1714,8 +1726,10 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
                     drvSys_velocity_controller.setTuning(updated_gains.vel_Kp, updated_gains.vel_Ki, 0);
                     drvSys_position_controller.setTuning(updated_gains.pos_Kp, updated_gains.pos_Ki, updated_gains.pos_Kd);
 
-                    drvSys_vel_ff_gain = updated_gains.vel_ff_gain;
-                    drvSys_acc_ff_gain = updated_gains.acc_ff_gain;
+                    drvSys_parameter_config.gains = updated_gains;
+
+                    vel_ff_gain = updated_gains.vel_ff_gain;
+                    acc_ff_gain = updated_gains.acc_ff_gain;
 
 
                     if (drvSys_controller_state.position_control) {
@@ -1776,11 +1790,11 @@ void _drvSys_PID_dual_controller_task(void* parameters) {
 
                     if (!drvSys_controller_state.feed_forward_control) {
                         torque_ff = 0;
-                        drvSys_acc_ff_gain = 0;
-                        drvSys_vel_ff_gain = 0;
+                        vel_ff_gain = 0;
+                        acc_ff_gain = 0;
                     }
 
-                    float motor_torque_target = drvSys_pid_torque + torque_ff + drvSys_vel_target * drvSys_vel_ff_gain + drvSys_acc_target * drvSys_acc_ff_gain;
+                    float motor_torque_target = drvSys_pid_torque + torque_ff + drvSys_vel_target * vel_ff_gain + drvSys_acc_target * acc_ff_gain;
 
                     _drvSys_set_target_torque(motor_torque_target);
                     counter++;
@@ -2261,9 +2275,9 @@ void drvSys_set_PID_gains(bool pos, const float Kp, const float Ki, const  float
     if (pos == true) {
         // Set Position PID settings
         // Write them to overall Drive System parameters
-        drvSys_parameter_config.pos_pid_gains.K_p = Kp;
-        drvSys_parameter_config.pos_pid_gains.K_i = Ki;
-        drvSys_parameter_config.pos_pid_gains.K_d = Kd;
+        drvSys_parameter_config.gains.pos_Kp = Kp;
+        drvSys_parameter_config.gains.pos_Ki = Ki;
+        drvSys_parameter_config.gains.pos_Kd = Kd;
 
         // Write them to controller instance
         drvSys_position_controller.setTuning(Kp, Ki, Kd);
@@ -2272,12 +2286,11 @@ void drvSys_set_PID_gains(bool pos, const float Kp, const float Ki, const  float
     }
     // set velocity gains
     if (pos == false) {
-        drvSys_parameter_config.vel_pid_gains.K_p = Kp;
-        drvSys_parameter_config.vel_pid_gains.K_i = Ki;
-        drvSys_parameter_config.vel_pid_gains.K_d = Kd;
+        drvSys_parameter_config.gains.vel_Kp = Kp;
+        drvSys_parameter_config.gains.vel_Ki = Ki;
 
         // Write them to controller instance
-        drvSys_velocity_controller.setTuning(Kp, Ki, Kd);
+        drvSys_velocity_controller.setTuning(Kp, Ki, 0);
     }
 
 
@@ -2335,12 +2348,13 @@ void drvSys_save_PID_gains() {
     drv_sys_preferences.begin(drvSys_PID_saved_gains, false);
 
     drv_sys_preferences.putBool("PID_Data", true);
-    drv_sys_preferences.putFloat("pP", drvSys_parameter_config.pos_pid_gains.K_p);
-    drv_sys_preferences.putFloat("pI", drvSys_parameter_config.pos_pid_gains.K_i);
-    drv_sys_preferences.putFloat("pD", drvSys_parameter_config.pos_pid_gains.K_d);
-    drv_sys_preferences.putFloat("vP", drvSys_parameter_config.vel_pid_gains.K_p);
-    drv_sys_preferences.putFloat("vI", drvSys_parameter_config.vel_pid_gains.K_i);
-    drv_sys_preferences.putFloat("vD", drvSys_parameter_config.vel_pid_gains.K_d);
+    drv_sys_preferences.putFloat("pP", drvSys_parameter_config.gains.pos_Kp);
+    drv_sys_preferences.putFloat("pI", drvSys_parameter_config.gains.pos_Ki);
+    drv_sys_preferences.putFloat("pD", drvSys_parameter_config.gains.pos_Kd);
+    drv_sys_preferences.putFloat("vP", drvSys_parameter_config.gains.vel_Kp);
+    drv_sys_preferences.putFloat("vI", drvSys_parameter_config.gains.vel_Ki);
+    drv_sys_preferences.putFloat("vff", drvSys_parameter_config.gains.vel_ff_gain);
+    drv_sys_preferences.putFloat("accff", drvSys_parameter_config.gains.acc_ff_gain);
 
     drv_sys_preferences.end();
 }
@@ -2409,9 +2423,9 @@ bool _drvSys_read_PID_gains_from_flash() {
 
     if (pid_gains_available) {
 
-        float K_pos_P = drv_sys_preferences.getFloat("pP", drvSys_parameter_config.pos_pid_gains.K_p);
-        float K_pos_I = drv_sys_preferences.getFloat("pI", drvSys_parameter_config.pos_pid_gains.K_i);
-        float K_pos_D = drv_sys_preferences.getFloat("pD", drvSys_parameter_config.pos_pid_gains.K_d);
+        float K_pos_P = drv_sys_preferences.getFloat("pP", drvSys_parameter_config.gains.pos_Kp);
+        float K_pos_I = drv_sys_preferences.getFloat("pI", drvSys_parameter_config.gains.pos_Ki);
+        float K_pos_D = drv_sys_preferences.getFloat("pD", drvSys_parameter_config.gains.pos_Kp);
 
         drvSys_set_PID_gains(true, K_pos_P, K_pos_I, K_pos_D, false);
 
@@ -2419,17 +2433,15 @@ bool _drvSys_read_PID_gains_from_flash() {
         Serial.println("DRVSYS_INFO: P = " + String(K_pos_P) + ", I = " + String(K_pos_I)
             + ", D = " + String(K_pos_D));
 
-        float K_vel_P = drv_sys_preferences.getFloat("vP", drvSys_parameter_config.pos_pid_gains.K_p);
-        float K_vel_I = drv_sys_preferences.getFloat("vI", drvSys_parameter_config.pos_pid_gains.K_i);
-        float K_vel_D = drv_sys_preferences.getFloat("vD", drvSys_parameter_config.pos_pid_gains.K_d);
+        float K_vel_P = drv_sys_preferences.getFloat("vP", drvSys_parameter_config.gains.vel_Kp);
+        float K_vel_I = drv_sys_preferences.getFloat("vI", drvSys_parameter_config.gains.vel_Ki);
 
 
-
-        drvSys_set_PID_gains(false, K_vel_P, K_vel_I, K_vel_D, false);
+        drvSys_set_PID_gains(false, K_vel_P, K_vel_I, 0, false);
 
         Serial.println("DRVSYS_INFO: Read Velocity PID Gains from Flash.");
         Serial.println("DRVSYS_INFO: P = " + String(K_vel_P) + ", I = " + String(K_vel_I)
-            + ", D = " + String(K_vel_D));
+            + ", D = " + String(0));
     }
 
     else {

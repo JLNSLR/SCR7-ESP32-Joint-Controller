@@ -24,6 +24,8 @@ void handle_motion_command(float target_pos, float travel_vel = 0, float travel_
 
 void handle_motion_command(drvSys_driveTargets target_traj_point);
 
+void handle_motion_control_command(drvSys_driveControlTargets target_data);
+
 void _motion_sequencer_task(void* parameters);
 
 void set_motion_mode(motion_control_mode);

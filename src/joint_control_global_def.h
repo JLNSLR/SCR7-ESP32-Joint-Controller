@@ -1,9 +1,6 @@
 #ifndef JOINT_CONTROL_GLOB_DEF_H
 #define JOINT_CONTROL_GLOB_DEF_H
 
-
-#define JOINT_ID 0
-
 // SPI CS PINs
 #define CS_ENCODER 16
 #define CS_TMC 17

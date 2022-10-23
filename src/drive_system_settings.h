@@ -68,7 +68,7 @@
 
 
 //Learning System 
-#define DRVSYS_PIDNN_LEARNING_REGULARIZATION 10 // (the lower this value, the more conservative (smaller Gains) the adaptive Tuning will be)
+#define DRVSYS_PIDNN_LEARNING_REGULARIZATION 1e-2 // (the higher this value, the more conservative (smaller Gains) the adaptive Tuning will be)
 
 
 // Task Stack Sizes
@@ -141,6 +141,8 @@
 #################### --- Testbuild Configuration --- ######################
 ######################################################################## */
 
+#define JOINT_ID 5
+
 
 // --- Motor Parameters --- */
 #define DRVSYS_PHASE_CURRENT_NOMINAL_mA 1500
@@ -205,6 +207,11 @@
 #define PID_VEL_GAIN_I 75
 #define PID_VEL_GAIN_D 0
 
+#define STEPPER_POS_GAIN_P 0.5
+#define STEPPER_POS_GAIN_I 0.0
+#define STEPPER_POS_GAIN_D 0.0
+
+
 // Constand Feedforward Gains
 #define DRVSYS_VEL_FF_GAIN 1*0.15
 #define DRVSYS_ACC_FF_GAIN 1*5.4e-6
@@ -233,6 +240,8 @@
 /*#########################################################################
 #################### --- Drive 6 Joint Configuration --- ######################
 ######################################################################## */
+
+#define JOINT_ID 6
 
 // --- Motor Parameters --- */
 #define DRVSYS_PHASE_CURRENT_NOMINAL_mA 400
@@ -272,6 +281,8 @@
 #################### --- Drive 5 Joint Configuration --- ######################
 ######################################################################## */
 
+#define JOINT_ID 4
+
 // --- Motor Parameters --- */
 #define DRVSYS_PHASE_CURRENT_NOMINAL_mA 1500
 #define DRVSYS_TRANSMISSION_RATIO 1
@@ -308,6 +319,8 @@
 /*#########################################################################
 #################### --- Drive 4 Joint Configuration --- ######################
 ######################################################################## */
+
+#define JOINT_ID 4
 
 // --- Motor Parameters --- */
 #define DRVSYS_PHASE_CURRENT_NOMINAL_mA 1680
@@ -346,6 +359,8 @@
 #################### --- Drive 3 Joint Configuration --- ######################
 ######################################################################## */
 
+#define JOINT_ID 3
+
 // --- Motor Parameters --- */
 #define DRVSYS_PHASE_CURRENT_NOMINAL_mA 1500
 #define DRVSYS_TRANSMISSION_RATIO 1
@@ -382,6 +397,8 @@
 /*#########################################################################
 #################### --- Drive 2 Joint Configuration --- ######################
 ######################################################################## */
+
+#define JOINT_ID 2
 
 // --- Motor Parameters --- */
 #define DRVSYS_PHASE_CURRENT_NOMINAL_mA 2100
@@ -420,6 +437,8 @@
 #################### --- Drive 1 Joint Configuration --- ######################
 ######################################################################## */
 
+#define JOINT_ID 1
+
 // --- Motor Parameters --- */
 #define DRVSYS_PHASE_CURRENT_NOMINAL_mA 2800
 #define DRVSYS_TRANSMISSION_RATIO 1
@@ -455,6 +474,8 @@
 /*#########################################################################
 #################### --- Drive 0 Joint Configuration --- ######################
 ######################################################################## */
+
+#define JOINT_ID 0
 
 // --- Motor Parameters --- */
 #define DRVSYS_PHASE_CURRENT_NOMINAL_mA 1500

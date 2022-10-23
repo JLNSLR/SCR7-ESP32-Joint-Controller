@@ -7,6 +7,8 @@
 #include <CAP/FDC2214.h>
 #include <joint_control_global_def.h>
 
+#include <Preferences.h>
+
 #define TORQUE_SENSOR_SAMPLE_TIME 3.125e-3
 #define CAPACITIVE_CHANNELS 4
 
@@ -20,6 +22,15 @@ public:
 
     bool init(torque_sensor_type type, float sample_time_s = TORQUE_SENSOR_SAMPLE_TIME);
     float get_torque_measurement();
+
+    /**
+     * @brief Set the save calibration data object
+     *
+     * @param type 0 - conversion factor, 1 - internal offset, 2 - external offset
+     * @param value value
+     */
+    void set_save_calibration_data(int type, float value);
+    void remove_calibration_data();
 
     torque_sensor_type type = dms;
 
@@ -43,6 +54,8 @@ public:
 
 
 
+
+
 private:
 
     float compensate_drift(float input);
@@ -51,6 +64,8 @@ private:
     bool init_capacitive_sensors();
     float read_raw_dms();
     float read_raw_capacitive_sensors();
+
+    bool read_calibration_data();
 
     NAU7802 dms_sensor;
     FDC2214* cap_sensor;
@@ -74,6 +89,19 @@ private:
     float prev_val = 0;
 
     float delta_data_prev = 0;
+
+
+    Preferences torque_preferences;
+    //Namespaces for Parameters
+    const char* torque_sensor_calibration_ns = "torque";
+    const char* int_offset_set_key = "int_off_s";
+    const char* conv_factor_set_key = "conv_s";
+
+    const char* conv_factor_key = "conv";
+    const char* int_offset_key = "int_off";
+    const char* ext_offset_key = "ext_off";
+
+
 
 
 };

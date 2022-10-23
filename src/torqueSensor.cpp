@@ -44,6 +44,11 @@ bool TorqueSensor::init(torque_sensor_type type, float sample_time_s) {
     }
     xSemaphoreGive(glob_I2C_mutex);
 
+    // check flash storage for calibration data
+
+    read_calibration_data();
+
+
 
     // Drift Compensator init
 
@@ -83,7 +88,7 @@ bool TorqueSensor::init_dms() {
         sensor_ok = true;
         dms_sensor.setLDO(NAU7802_LDO_3V0);
         dms_sensor.setSampleRate(NAU7802_SPS_320);
-        dms_sensor.setGain(NAU7802_GAIN_32);
+        dms_sensor.setGain(NAU7802_GAIN_64);
         dms_sensor.beginCalibrateAFE();
         dms_sensor.waitForCalibrateAFE();
     }
@@ -91,7 +96,6 @@ bool TorqueSensor::init_dms() {
     conversion_factor = TORQUE_SENSE_SLOPE;
     internal_offset = TORQUE_SENSE_INT_OFFSET;
 
-    calibrated = true;
 
     return sensor_ok;
 
@@ -128,7 +132,8 @@ float TorqueSensor::read_raw_capacitive_sensors() {
 
 float TorqueSensor::read_raw_dms() {
 
-    float data = 0;
+    static float data = 0;
+    static float data_prev = 0;
 
     xSemaphoreTake(glob_I2C_mutex, portMAX_DELAY);
     if (dms_sensor.available()) {
@@ -148,7 +153,21 @@ float TorqueSensor::read_raw_dms() {
         //Serial.print("\t");
         //Serial.println(data);
 
+        if (raw_sensor_val == 0) {
+            data = data_prev;
+        }
+        else {
+            const float alpha = 0.32; // ~125Hz
 
+            data = data * alpha + data_prev * (1 - alpha);
+            data_prev = data;
+        }
+
+
+
+    }
+    else {
+        data = data_prev;
     }
     xSemaphoreGive(glob_I2C_mutex);
 
@@ -212,6 +231,77 @@ float TorqueSensor::compensate_drift(float input) {
 
     float corrected_value = input - x_drift(0);
     return corrected_value;
+
+
+}
+
+
+/**
+ * @brief Set the save calibration data object
+ *
+ * @param type 0 - conversion factor, 1 - internal offset, 2 - external offset
+ * @param value value
+ */
+void TorqueSensor::set_save_calibration_data(int type, float value) {
+
+    torque_preferences.begin(torque_sensor_calibration_ns, false);
+    if (type == 0) {
+        this->conversion_factor = value;
+        torque_preferences.putFloat(conv_factor_key, value);
+        torque_preferences.putBool(conv_factor_set_key, true);
+    }
+    else if (type == 1) {
+        this->internal_offset = value;
+        torque_preferences.putFloat(int_offset_key, value);
+        torque_preferences.putBool(int_offset_set_key, true);
+    }
+    else if (type == 2) {
+        this->external_offset = value;
+        torque_preferences.putFloat(ext_offset_key, value);
+    }
+
+    bool torque_conv_set = torque_preferences.getBool(conv_factor_set_key, false);
+    bool torque_int_offset_set = torque_preferences.getBool(int_offset_set_key, false);
+
+    if (torque_conv_set && torque_int_offset_set) {
+
+        this->calibrated = true;
+    }
+
+    torque_preferences.end();
+}
+
+void TorqueSensor::remove_calibration_data() {
+
+    torque_preferences.begin(torque_sensor_calibration_ns, false);
+
+    torque_preferences.clear();
+
+    torque_preferences.end();
+
+}
+
+
+void TorqueSensor::read_calibration_data() {
+
+    torque_preferences.begin(torque_sensor_calibration_ns, false);
+
+    if (torque_preferences.getBool(conv_factor_set_key, false)) {
+        this->conversion_factor = torque_preferences.getFloat(conv_factor_key, 1.0);
+
+        if (torque_preferences.getBool(int_offset_set_key, false)) {
+            this->internal_offset = torque_preferences.getFloat(int_offset_key, 0);
+
+            this->calibrated = true;
+
+            this->external_offset = torque_preferences.getFloat(ext_offset_key, 0);
+
+        }
+        else {
+            this->calibrated = false;
+        }
+    }
+    torque_preferences.end();
 
 
 }
